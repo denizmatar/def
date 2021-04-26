@@ -2,17 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "hardhat/console.sol";
-import {
-    add,
-    sub
-} from "openzeppelin-solidity/contracts/utils/math/SafeMath.sol";
-
-library SafeMath {
-    function 
-}
 
 contract Defter {
-    using SafeMath for uint256;
     /*
     BALANCES:
     {
@@ -74,8 +65,7 @@ contract Defter {
         // holder list teki amount toplami == total amount olmali => bunu front end check etsin
         // bu loop'un cok pahali olmamasi icin frontend'e max receiver koyulmali mi?
         for (uint256 i = 0; i < receivers.length; i++) {
-            add(balances[_lineID][receivers[i]], amounts[i]);
-            // balances[_lineID][receivers[i]].add(amounts[i]);
+            balances[_lineID][receivers[i]] += amounts[i];
         }
 
         totalLines++;
@@ -90,10 +80,8 @@ contract Defter {
         uint256[] memory amounts
     ) public {
         for (uint256 i = 0; i < receivers.length; i++) {
-            // sub(balances[lineID][msg.sender], amounts[i]);
-            // add(balances[lineID][receivers[i]], amounts[i]);
-            balances[lineID][msg.sender].sub(amounts[i]);
-            balances[lineID][receivers[i]].add(amounts[i]);
+            balances[lineID][msg.sender] -= amounts[i];
+            balances[lineID][receivers[i]] += amounts[i];
         }
         emit TransferLine(msg.sender, lineID);
     }
