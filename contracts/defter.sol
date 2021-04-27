@@ -25,8 +25,6 @@ contract Defter {
     */
     mapping(bytes32 => mapping(address => uint256)) balances;
 
-    uint256 totalLines = 0;
-
     event OpenLine(
         address indexed from,
         // address[] receivers,
@@ -59,16 +57,19 @@ contract Defter {
         address[] memory receivers,
         uint256[] memory amounts
     ) public {
+        // check maturity
+        require(_maturityDate > (block.timestamp + 1 days));
+
         // line hashle => lineID
         bytes32 _lineID = hashLine(msg.sender, _maturityDate, _unit);
 
         // holder list teki amount toplami == total amount olmali => bunu front end check etsin
         // bu loop'un cok pahali olmamasi icin frontend'e max receiver koyulmali mi?
         for (uint256 i = 0; i < receivers.length; i++) {
+            require(receivers[i] != address(0));
+            require(amounts[i] != 0);
             balances[_lineID][receivers[i]] += amounts[i];
         }
-
-        totalLines++;
 
         // madem alicilari da log'da saklayalim?
         emit OpenLine(msg.sender, _lineID);
@@ -80,6 +81,9 @@ contract Defter {
         uint256[] memory amounts
     ) public {
         for (uint256 i = 0; i < receivers.length; i++) {
+            require(balances[lineID][msg.sender] > 0);
+            require(receivers[i] != address(0));
+            require(amounts[i] != 0);
             balances[lineID][msg.sender] -= amounts[i];
             balances[lineID][receivers[i]] += amounts[i];
         }
