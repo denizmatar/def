@@ -88,19 +88,17 @@ describe("Defterhane", () => {
                 [owner.address, 2000000000, token.address],
             )
             await expect(
-                defter.openLine(
+                await defter.openLine(
                     2000000000,
                     token.address,
                     [addr1.address, addr2.address],
                     [20, 30],
                 ),
-            ).to.emit(defter, "LineOpened")
-            // .withArgs(
-            //     owner.address,
-            //     [addr1.address, addr2.address],
-            //     [20, 30],
-            //     hashedLine,
-            // )
+            )
+                .to.emit(defter, "LineOpened")
+                .withArgs(owner.address, addr1.address, 20, hashedLine)
+                .to.emit(defter, "LineOpened")
+                .withArgs(owner.address, addr2.address, 30, hashedLine)
         })
     })
     describe("transferLine", () => {
@@ -171,9 +169,16 @@ describe("Defterhane", () => {
             await expect(
                 defter
                     .connect(addr2)
-                    .transferLine(hashedLine, [addr1.address], [30]),
-            ).to.emit(defter, "LineTransferred")
-            // .withArgs(addr2.address, [addr1.address], [30], hashedLine)
+                    .transferLine(
+                        hashedLine,
+                        [addr1.address, addr3.address],
+                        [15, 15],
+                    ),
+            )
+                .to.emit(defter, "LineTransferred")
+                .withArgs(addr2.address, addr1.address, 15, hashedLine)
+                .to.emit(defter, "LineTransferred")
+                .withArgs(addr2.address, addr3.address, 15, hashedLine)
         })
     })
     describe("closeLine", () => {
