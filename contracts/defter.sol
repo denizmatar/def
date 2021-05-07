@@ -1,8 +1,8 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "hardhat/console.sol";
-import "contracts/IERC20.sol";
+// import "hardhat/console.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
 contract Defter {
     /*
@@ -24,19 +24,27 @@ contract Defter {
             }
     }
     */
+
+    struct Line {
+        bool isOpen;
+        uint256 totalAmount;
+    }
+
+    mapping(bytes32 => Line) lines;
+
     mapping(bytes32 => mapping(address => uint256)) balances;
 
     event LineOpened(
         address indexed from,
-        address[] receivers,
-        uint256[] amounts,
+        address receiver,
+        uint256 amount,
         bytes32 indexed lineID
     );
 
     event LineTransferred(
         address indexed from,
-        address[] receivers,
-        uint256[] amounts,
+        address receiver,
+        uint256 amount,
         bytes32 indexed lineID
     );
 
@@ -68,101 +76,100 @@ contract Defter {
         return balances[_lineID][_holder];
     }
 
-    // function transfer(
-    //     address sender,
-    //     address recipient,
-    //     uint256 amount,
-    //     address tokenContractAddress
-    // ) public returns (bool) {
-    //     IERC20(tokenContractAddress).transferFrom(sender, recipient, amount);
-
-    //     return true;
-    // }
-
     function openLine(
         uint256 _maturityDate,
         address _unit,
-        address[] memory receivers,
-        uint256[] memory amounts
+        address[] memory _receivers,
+        uint256[] memory _amounts
     ) external {
-        openLineHelper(_maturityDate, _unit, receivers, amounts);
-    }
-
-    function openLineHelper(
-        uint256 _maturityDate,
-        address _unit,
-        address[] memory receivers,
-        uint256[] memory amounts
-    ) internal {
         require(
             _maturityDate > (block.timestamp + 1 days),
             "can't open line for such a date this close"
         );
+        require(
+            _receivers.length > 0 && _amounts.length > 0,
+            "missing receivers or amounts"
+        );
+        require(
+            _receivers.length == _amounts.length,
+            "number of receivers and amounts don't match"
+        );
 
         bytes32 _lineID = hashLine(msg.sender, _maturityDate, _unit);
 
-        for (uint256 i = 0; i < receivers.length; i++) {
-            require(
-                receivers[i] != address(0),
-                "can't open line for 0 address"
-            );
-            require(amounts[i] != 0, "can't open line for 0 amount");
-            balances[_lineID][receivers[i]] += amounts[i];
+        lines[_lineID].isOpen = true;
+
+        for (uint256 i = 0; i < _receivers.length; i++) {
+            openLineHelper(_lineID, _receivers[i], _amounts[i]);
         }
-        emit LineOpened(msg.sender, receivers, amounts, _lineID);
+    }
+
+    function openLineHelper(
+        bytes32 _lineID,
+        address _receiver,
+        uint256 _amount
+    ) internal {
+        require(_receiver != address(0), "can't open line for 0 address");
+        require(_amount != 0, "can't open line for 0 amount");
+        balances[_lineID][_receiver] += _amount;
+        lines[_lineID].totalAmount += _amount;
+        emit LineOpened(msg.sender, _receiver, _amount, _lineID);
     }
 
     function transferLine(
-        bytes32 lineID,
-        address[] memory receivers,
-        uint256[] memory amounts
+        bytes32 _lineID,
+        address[] memory _receivers,
+        uint256[] memory _amounts
     ) external {
-        transferLineHelper(lineID, receivers, amounts);
+        require(balances[_lineID][msg.sender] > 0, "sender has 0 balance");
+        require(
+            _receivers.length > 0 && _amounts.length > 0,
+            "missing receivers or amounts"
+        );
+        require(
+            _receivers.length == _amounts.length,
+            "number of receivers and amounts don't match"
+        );
+
+        for (uint256 i = 0; i < _receivers.length; i++) {
+            transferLineHelper(_lineID, _receivers[i], _amounts[i]);
+        }
     }
 
     function transferLineHelper(
-        bytes32 lineID,
-        address[] memory receivers,
-        uint256[] memory amounts
+        bytes32 _lineID,
+        address _receiver,
+        uint256 _amount
     ) internal {
-        for (uint256 i = 0; i < receivers.length; i++) {
-            require(balances[lineID][msg.sender] > 0, "sender has 0 balance");
-            require(receivers[i] != address(0), "can't transfer to 0 address");
-            require(amounts[i] != 0, "can't transfer 0 amount");
-            balances[lineID][msg.sender] -= amounts[i];
-            balances[lineID][receivers[i]] += amounts[i];
-        }
-        // emitleri loop'un icine alamadim cunku testini yazamadim o sekilde
-        // illa sartsa bir cozum uretebiliriz
-        emit LineTransferred(msg.sender, receivers, amounts, lineID);
+        require(_receiver != address(0), "can't transfer to 0 address");
+        require(_amount != 0, "can't transfer 0 amount");
+        balances[_lineID][msg.sender] -= _amount;
+        balances[_lineID][_receiver] += _amount;
+        emit LineTransferred(msg.sender, _receiver, _amount, _lineID);
     }
 
     function closeLine(
         uint256 _maturityDate,
         address _unit,
         uint256 _totalAmount
-    ) public {
-        closeLineHelper(_maturityDate, _unit, _totalAmount);
-    }
+    ) external {
+        // total amount parametre olarak alsin, ve front'end hesaplayip gondersin.
+        // cunku burda for loop yapmak zorundayim, gereksiz maliyet gibi geldi.
+        // balances[_linedID][0] yazmissin ama address bekledigini soyluyor bana
 
-    // total amount parametre olarak alsin, ve front'end hesaplayip gondersin.
-    // cunku burda for loop yapmak zorundayim, gereksiz maliyet gibi geldi.
-    // balances[_linedID][0] yazmissin ama address bekledigini soyluyor bana
-    function closeLineHelper(
-        uint256 _maturityDate,
-        address _unit,
-        uint256 _totalAmount
-    ) internal {
-        IERC20 token = IERC20(_unit);
         bytes32 _lineID = hashLine(msg.sender, _maturityDate, _unit);
+
+        require(_totalAmount == lines[_lineID].totalAmount);
+
+        IERC20 token = IERC20(_unit);
         token.transferFrom(msg.sender, address(this), _totalAmount);
 
+        lines[_lineID].isOpen = false;
+
         emit LineClosed(msg.sender, _lineID, _totalAmount);
-        // artik withdraw edilebildigini belirtmem lazim ama nasil?
-        // front end emit'i kontrol ederek bu isi halledebilir mi?
     }
 
-    function withdraw(bytes32 _lineID, address _unit) public {
+    function withdraw(bytes32 _lineID, address _unit) external {
         uint256 amount = balances[_lineID][msg.sender];
         IERC20 token = IERC20(_unit);
 
@@ -176,6 +183,8 @@ contract Defter {
             }
         }
     }
+
+    receive() external payable {}
 
     fallback() external payable {}
 }
