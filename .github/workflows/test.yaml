@@ -18,10 +18,13 @@ jobs:
           registry-url: https://registry.npmjs.org
           
       - name: Install dependencies
+        working-directory: packages/def/
         run: npm install
       
       - name: Compile
+        working-directory: packages/def/
         run: npm run compile
         
       - name: Run tests
+        working-directory: packages/def/
         run: npm test
