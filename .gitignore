@@ -1,5 +1,5 @@
-/node_modules
-/cache
-/artifacts
-/scripts
-/typechain
+packages/def/node_modules
+packages/def/cache
+packages/def/artifacts
+packages/def/scripts
+packages/def/typechain
