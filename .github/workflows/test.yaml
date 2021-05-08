@@ -7,7 +7,7 @@ on:
       
 jobs:
   test:
-    name: Checkout
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -16,5 +16,12 @@ jobs:
         with:
           node-version: '14'
           registry-url: https://registry.npmjs.org
-      - run: npm install
+          
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Compile
+        run: npm compile
+        
+      - name: Run tests
       - run: npm test
