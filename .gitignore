@@ -3,3 +3,4 @@ packages/def/cache
 packages/def/artifacts
 packages/def/scripts
 packages/def/typechain
+.idea
