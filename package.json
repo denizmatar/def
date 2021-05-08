@@ -27,5 +27,9 @@
   },
   "dependencies": {
     "openzeppelin-solidity": "^4.0.0"
+  },
+  "scripts": {
+    "compile": "hardhat compile"
+    "test": "hardhat test"
   }
 }
