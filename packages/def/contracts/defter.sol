@@ -79,8 +79,8 @@ contract Defter {
     function openLine(
         uint256 _maturityDate,
         address _unit,
-        address[] memory _receivers,
-        uint256[] memory _amounts
+        address[] calldata _receivers,
+        uint256[] calldata _amounts
     ) external {
         require(
             _maturityDate > (block.timestamp + 1 days),
@@ -118,8 +118,8 @@ contract Defter {
 
     function transferLine(
         bytes32 _lineID,
-        address[] memory _receivers,
-        uint256[] memory _amounts
+        address[] calldata _receivers,
+        uint256[] calldata _amounts
     ) external {
         require(balances[_lineID][msg.sender] > 0, "sender has 0 balance");
         require(
@@ -133,6 +133,30 @@ contract Defter {
 
         for (uint256 i = 0; i < _receivers.length; i++) {
             transferLineHelper(_lineID, _receivers[i], _amounts[i]);
+        }
+    }
+
+    function transferLines(
+        bytes32[] calldata _lineIDs,
+        uint256[] calldata _amounts,
+        address _receiver
+    ) external {
+        require(
+            _lineIDs.length > 0 && _amounts.length > 0,
+            "missing line IDs or amounts"
+        );
+        require(
+            _lineIDs.length == _amounts.length,
+            "number of line IDs and amounts don't match"
+        );
+
+        for (uint256 i = 0; i < _lineIDs.length; i++) {
+            require(
+                balances[_lineIDs[i]][msg.sender] > 0,
+                "sender has 0 balance" // should we specify the lineID here?
+            );
+
+            transferLineHelper(_lineIDs[i], _receiver, _amounts[i]);
         }
     }
 

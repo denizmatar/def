@@ -122,6 +122,52 @@ describe("Defterhane", () => {
             const balance = await defter.getBalances(hashedLine, addr3.address)
             expect(balance).to.equal(40)
         })
+        it("transfers multiple lines", async () => {
+            await defter.openLine(
+                2000000000,
+                token.address,
+                [addr2.address],
+                [20],
+            )
+            await defter.openLine(
+                2000000001,
+                token.address,
+                [addr2.address],
+                [30],
+            )
+
+            const hashedLine1 = utils.solidityKeccak256(
+                ["bytes", "uint256", "address"],
+                [owner.address, 2000000000, token.address],
+            )
+            const hashedLine2 = utils.solidityKeccak256(
+                ["bytes", "uint256", "address"],
+                [owner.address, 2000000001, token.address],
+            )
+            const beforeBalance1 = (
+                await defter.getBalances(hashedLine1, addr3.address)
+            ).toNumber()
+            const beforeBalance2 = (
+                await defter.getBalances(hashedLine2, addr3.address)
+            ).toNumber()
+
+            await defter
+                .connect(addr2)
+                .transferLines(
+                    [hashedLine1, hashedLine2],
+                    [20, 30],
+                    addr3.address,
+                )
+            const afterBalance1 = (
+                await defter.getBalances(hashedLine1, addr3.address)
+            ).toNumber()
+            const afterBalance2 = (
+                await defter.getBalances(hashedLine2, addr3.address)
+            ).toNumber()
+
+            expect(afterBalance1 - beforeBalance1).to.equal(20)
+            expect(afterBalance2 - beforeBalance2).to.equal(30)
+        })
         it("cannot transfer if zero balance", async () => {
             const hashedLine = utils.solidityKeccak256(
                 ["bytes", "uint256", "address"],
