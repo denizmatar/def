@@ -2,6 +2,7 @@
   "name": "defterhane",
   "version": "1.0.0",
   "description": "",
+  "author": "Deniz Matar",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/denizmatar/def.git"
@@ -10,7 +11,6 @@
   	"packages/def",
   	"packages/wallet"
   ]
-  "author": "Deniz Matar",
   "scripts": {
     "compile": "npm run compile"
     "test": "npm test"
