@@ -1,0 +1,18 @@
+{
+    "dependencies": {
+        "@typechain/ethers-v5": "^7.0.0",
+        "chai": "^4.3.4",
+        "ethers": "^5.1.4",
+        "hardhat": "^2.2.1",
+        "mkdirp": "^1.0.4",
+        "openzeppelin-solidity": "^4.1.0"
+    },
+    "devDependencies": {
+        "@types/node": "^15.0.2"
+    },
+    "scripts": {
+        "generate_contract_wrappers": "npm run generate_contract_wrappers:clean && npm run generate_contract_wrappers:typechain",
+        "generate_contract_wrappers:clean": "rm -rf src/contracts",
+        "generate_contract_wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../def/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'"
+    }
+}
