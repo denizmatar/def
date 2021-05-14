@@ -8,11 +8,11 @@
     "url": "git+https://github.com/denizmatar/def.git"
   },
   "workspaces": [
-  	"packages/def",
-  	"packages/wallet"
-  ]
+    "packages/def",
+    "packages/wallet"
+  ],
   "scripts": {
-    "compile": "npm run compile"
+    "compile": "npm run compile",
     "test": "npm test"
-  },
+  }
 }
