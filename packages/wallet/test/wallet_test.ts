@@ -1,59 +1,115 @@
-import { Wallet } from "../wallet"
+import { expect } from "chai"
+// import { describe, it, beforeEach } from "mocha"
 import * as ethers from "ethers"
-import { formatBytes32String } from "@ethersproject/strings"
+// import { ethers } from "hardhat"
+import { describe, beforeEach, it } from "mocha"
+import { Wallet } from "../wallet"
+import { Defter__factory } from "../src/contracts/factories/Defter__factory"
+import { MTRToken__factory } from "../src/contracts/factories/MTRToken__factory"
 
-// let wallet = new Wallet;
+let defter: Wallet
+let token: any
+let contract: any
 
-async function test() {
-    const defter = new Wallet("0xF0E0ccf33315d40D05bC2a38536fb4351F2c5Df8")
-    const provider = defter.provider
-    const contract = defter.contract
+const provider = new ethers.providers.JsonRpcProvider("http://127.0.0.1:7545")
 
-    const tokenAddress = "0x9d88346B94AF9875A327f59f019A2751F6184344"
+// =============================
+// Get Addresses...
+const s0 = provider.getSigner(0)
+const s1 = provider.getSigner(1)
+const s2 = provider.getSigner(2)
 
-    const owner = "0x75340d6fb6D18e7bdD8e74f0f1c89296Cce23821"
-    const addr1 = "0x9525F51Ca7fA140a6c3B1099A76413D39E61e356"
-    const addr2 = "0x8ACF325Fa27836AdC91DB4a792bf345DE11480c6"
-    const addr3 = "0xE69D2c7F446Cd7fB7d5776E0B24c1C2D3082F916"
+let owner: string
+let addr1: string
+let addr2: string
 
-    // const addr1 = defter.getSigners(1)
-    // const addr2 = defter.getSigners(2)
-
-    // console.log(contract.address)
-
-    // await contract.openLine(2000000000, tokenAddress, [addr1], [10])
-
-    // await contract.on("LineOpened", (from, receiver, amount, lineID) => {
-    //     console.log(from)
-    //     console.log(receiver)
-    //     console.log(amount)
-    //     console.log(lineID)
-    // })
-
-    // let filter = contract.filters.LineOpened(owner)
-    // contract.on(filter, () => {})
-    await contract.on(
-        "LineOpened",
-        (from: string, receiver: string, amount: number, lineID: string) => {
-            console.log(from)
-            console.log(receiver)
-            console.log(amount.toString())
-            console.log(lineID)
-            console.log("listened")
-        },
-    )
-
-    // const results = await contract.queryFilter("LineOpened", 0, 5)
-
-    // console.log(results)
-
-    // await contract.openLine(2000000000, tokenAddress, [addr1], [10])
-    // await contract.openLine(2000000000, tokenAddress, [addr1], [10])
-    // await contract.openLine(2000000000, tokenAddress, [addr1], [10])
-
-    // const filter = contract.filters.LineOpened()
-    // console.log(filter)
-    // console.log(await contract.listenerCount("LineOpened"))
+async function getAddresses() {
+    owner = await s0.getAddress()
+    addr1 = await s1.getAddress()
+    addr2 = await s2.getAddress()
 }
 
-test()
+getAddresses()
+// =============================
+
+const defterFactory = new ethers.ContractFactory(
+    new ethers.utils.Interface(Defter__factory.abi),
+    Defter__factory.bytecode,
+    s0,
+)
+const tokenFactory = new ethers.ContractFactory(
+    new ethers.utils.Interface(MTRToken__factory.abi),
+    MTRToken__factory.bytecode,
+    s0,
+)
+
+// console.log(defterFactory)
+// console.log(Defter__factory) // cok benziyolar ama Defter__factory icinde deploy olmasina ragmen .deploy() edilmiyor
+
+describe("Wallet", async () => {
+    beforeEach(async () => {
+        contract = await defterFactory.deploy()
+        token = await tokenFactory.deploy(100000)
+        defter = new Wallet(contract.address, provider)
+
+        await defter.openLine(
+            2000000000,
+            token.address,
+            [addr1, addr2],
+            [20, 30],
+        )
+    })
+    it("openLine", async () => {
+        const hashedLine = ethers.utils.solidityKeccak256(
+            ["bytes", "uint256", "address"],
+            [owner, 2000000000, token.address],
+        )
+
+        const balance = (await defter.getBalances(hashedLine, addr2)).toNumber()
+        expect(balance).to.equal(30)
+    })
+    it("transferLine", async () => {
+        const hashedLine = ethers.utils.solidityKeccak256(
+            ["bytes", "uint256", "address"],
+            [owner, 2000000000, token.address],
+        )
+
+        await defter.transferLine(hashedLine, [addr1], [30], s2)
+
+        const balance = (await defter.getBalances(hashedLine, addr1)).toNumber()
+        expect(balance).to.equal(50)
+    })
+    it("closeLine", async () => {
+        // thousand years later, again :)
+        await token.approve(contract.address, 50)
+
+        const balanceBefore = (
+            await token.balanceOf(contract.address)
+        ).toNumber()
+
+        await defter.closeLine(2000000000, token.address, 50)
+
+        const balanceAfter = (
+            await token.balanceOf(contract.address)
+        ).toNumber()
+
+        expect(balanceAfter - balanceBefore).to.equal(50)
+    })
+    it("withdraw", async () => {
+        await token.approve(contract.address, 50)
+        await defter.closeLine(2000000000, token.address, 50)
+
+        const hashedLine = ethers.utils.solidityKeccak256(
+            ["bytes", "uint256", "address"],
+            [owner, 2000000000, token.address],
+        )
+
+        const balanceBefore = (await token.balanceOf(addr2)).toNumber()
+
+        await defter.withdraw(hashedLine, token.address, s2)
+
+        const balanceAfter = (await token.balanceOf(addr2)).toNumber()
+
+        expect(balanceAfter - balanceBefore).to.equal(30)
+    })
+})

@@ -13,6 +13,7 @@
   ],
   "scripts": {
     "compile": "npm run compile",
-    "test": "npm test"
+    "test": "npm test",
+    "postinstall": "(cd packages/def && npm i); (cd packages/wallet && npm i)"
   }
 }

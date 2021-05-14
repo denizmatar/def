@@ -3,4 +3,6 @@ packages/def/cache
 packages/def/artifacts
 packages/def/scripts
 packages/def/typechain
+packages/wallet/node_modules
+node_modules
 .idea

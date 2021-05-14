@@ -1,16 +1,22 @@
 {
     "dependencies": {
+        "@nomiclabs/hardhat-ethers": "^2.0.2",
         "@typechain/ethers-v5": "^7.0.0",
         "chai": "^4.3.4",
         "ethers": "^5.1.4",
         "hardhat": "^2.2.1",
+        "hardhat-deploy-ethers": "*",
         "mkdirp": "^1.0.4",
+        "mocha": "^7.2.0",
         "openzeppelin-solidity": "^4.1.0"
     },
     "devDependencies": {
+        "@types/chai": "^4.2.18",
+        "@types/mocha": "^8.2.2",
         "@types/node": "^15.0.2"
     },
     "scripts": {
+        "test": "tsc ./test/wallet_test.ts && ./node_modules/mocha/bin/mocha ./test",
         "generate_contract_wrappers": "npm run generate_contract_wrappers:clean && npm run generate_contract_wrappers:typechain",
         "generate_contract_wrappers:clean": "rm -rf src/contracts",
         "generate_contract_wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../def/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'"
