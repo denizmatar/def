@@ -1,4 +1,5 @@
 import { ethers } from "ethers"
+import { eventNames } from "process"
 import { Defter } from "./src/contracts/Defter"
 import { Defter__factory } from "./src/contracts/factories/Defter__factory"
 
@@ -62,59 +63,81 @@ export class Wallet {
         await this.contract.connect(connector).withdraw(lineID, unit)
     }
 
-    // LISTENERS
-
-    async openLineListener(cb: any) {
+    // LISTENERS ON
+    async openLineListenerOn(filter: any, cb: any) {
         await this.contract.on(
-            "LineOpened",
+            filter,
             (
                 from: string,
                 receiver: string,
                 amount: number,
                 lineID: string,
+                event: any,
             ) => {
-                console.log(from)
-                console.log(receiver)
-                console.log(amount.toString())
-                console.log(lineID)
+                event.removeListener()
                 cb()
-                // burda bize frontendin verdigi callback fonksiyonunu cagiracagiz
             },
         )
     }
 
-    async transferLineListener(cb: any) {
+    async transferLineListenerOn(cb: any) {
         await this.contract.on(
             "LineTransferred",
             (from: string, lineID: string, totalAmount: number) => {
-                console.log(from)
-                console.log(lineID)
-                console.log(totalAmount.toString())
+                cb()
             },
         )
     }
 
-    async closeLineListener(cb: any) {
+    async closeLineListenerOn(cb: any) {
         await this.contract.on(
             "LineClosed",
             (from: string, lineID: string, totalAmount: number) => {
-                console.log(from)
-                console.log(lineID)
-                console.log(totalAmount.toString())
+                cb()
             },
         )
     }
 
-    async withdrawListener(cb: any) {
+    async withdrawListenerOn(cb: any) {
         await this.contract.on(
             "Withdrawn",
             (from: string, lineID: string, amount: number) => {
-                console.log(from)
-                console.log(lineID)
-                console.log(amount.toString())
+                cb()
             },
         )
     }
 
-    // event history ceken fonksiyonlari ekle
+    // LISTENERS OFF
+    async openLineListenerOff() {
+        await this.contract.off("LineOpened", () => {})
+    }
+
+    async transferLineListenerOff() {
+        await this.contract.off("LineTransferred", () => {})
+    }
+
+    async closeLineListenerOff() {
+        await this.contract.off("LineClosed", () => {})
+    }
+
+    async withdrawListenerOff() {
+        await this.contract.off("Withdrawn", () => {})
+    }
+
+    // QUERY
+    async openedLines(start: number, end: number) {
+        return await this.contract.queryFilter("LineOpened", start, end)
+    }
+
+    async transferredLines(start: number, end: number) {
+        return await this.contract.queryFilter("LineTransferred", start, end)
+    }
+
+    async closedLines(start: number, end: number) {
+        return await this.contract.queryFilter("LineClosed", start, end)
+    }
+
+    async withdrawns(start: number, end: number) {
+        return await this.contract.queryFilter("Withdrawn", start, end)
+    }
 }

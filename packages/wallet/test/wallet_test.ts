@@ -1,15 +1,14 @@
 import { expect } from "chai"
-// import { describe, it, beforeEach } from "mocha"
+import { describe, beforeEach, it, after } from "mocha"
 import * as ethers from "ethers"
-// import { ethers } from "hardhat"
-import { describe, beforeEach, it } from "mocha"
 import { Wallet } from "../wallet"
+import { Defter } from "../src/contracts/Defter"
 import { Defter__factory } from "../src/contracts/factories/Defter__factory"
 import { MTRToken__factory } from "../src/contracts/factories/MTRToken__factory"
 
 let defter: Wallet
 let token: any
-let contract: any
+let contract: any // Defter yapinca 'contract' kiziyor
 
 const provider = new ethers.providers.JsonRpcProvider("http://127.0.0.1:7545")
 
@@ -50,6 +49,7 @@ describe("Wallet", async () => {
     beforeEach(async () => {
         contract = await defterFactory.deploy()
         token = await tokenFactory.deploy(100000)
+
         defter = new Wallet(contract.address, provider)
 
         await defter.openLine(
@@ -59,57 +59,95 @@ describe("Wallet", async () => {
             [20, 30],
         )
     })
-    it("openLine", async () => {
-        const hashedLine = ethers.utils.solidityKeccak256(
-            ["bytes", "uint256", "address"],
-            [owner, 2000000000, token.address],
-        )
+    describe("openLine", async () => {
+        it("opens line", async () => {
+            const hashedLine = ethers.utils.solidityKeccak256(
+                ["bytes", "uint256", "address"],
+                [owner, 2000000000, token.address],
+            )
 
-        const balance = (await defter.getBalances(hashedLine, addr2)).toNumber()
-        expect(balance).to.equal(30)
+            const balance = (
+                await defter.getBalances(hashedLine, addr2)
+            ).toNumber()
+            expect(balance).to.equal(30)
+        })
+        // after(async () => {
+        //     await defter.contract.removeAllListeners("LineOpened")
+        // })
+        it("turns on listener", async () => {
+            //     await defter.contract.removeAllListeners(
+            //         "LineOpened",
+            //     )
+
+            // filter kullanabiliyorum, veya direkt "LineOpened" yazabiliyorum wallet icinde
+            const filter = await defter.contract.filters.LineOpened(owner)
+
+            await defter.openLineListenerOn(filter, () => {
+                console.log("cb working")
+            })
+
+            await defter.openLine(2000000000, token.address, [addr1], [50])
+
+            await defter.contract.removeAllListeners("LineOpened")
+        })
+        it("turns off listener", async () => {
+            await defter.openLineListenerOff()
+        })
+        xit("gets past events", async () => {
+            const result = await defter.openedLines(0, 999)
+            console.log(result)
+        })
     })
-    it("transferLine", async () => {
-        const hashedLine = ethers.utils.solidityKeccak256(
-            ["bytes", "uint256", "address"],
-            [owner, 2000000000, token.address],
-        )
+    describe("transferLine", async () => {
+        it("transfers line", async () => {
+            const hashedLine = ethers.utils.solidityKeccak256(
+                ["bytes", "uint256", "address"],
+                [owner, 2000000000, token.address],
+            )
 
-        await defter.transferLine(hashedLine, [addr1], [30], s2)
+            await defter.transferLine(hashedLine, [addr1], [30], s2)
 
-        const balance = (await defter.getBalances(hashedLine, addr1)).toNumber()
-        expect(balance).to.equal(50)
+            const balance = (
+                await defter.getBalances(hashedLine, addr1)
+            ).toNumber()
+            expect(balance).to.equal(50)
+        })
     })
-    it("closeLine", async () => {
-        // thousand years later, again :)
-        await token.approve(contract.address, 50)
+    describe("closeLine", async () => {
+        it("closes line", async () => {
+            // thousand years later, again :)
+            await token.approve(contract.address, 50)
 
-        const balanceBefore = (
-            await token.balanceOf(contract.address)
-        ).toNumber()
+            const balanceBefore = (
+                await token.balanceOf(contract.address)
+            ).toNumber()
 
-        await defter.closeLine(2000000000, token.address, 50)
+            await defter.closeLine(2000000000, token.address, 50)
 
-        const balanceAfter = (
-            await token.balanceOf(contract.address)
-        ).toNumber()
+            const balanceAfter = (
+                await token.balanceOf(contract.address)
+            ).toNumber()
 
-        expect(balanceAfter - balanceBefore).to.equal(50)
+            expect(balanceAfter - balanceBefore).to.equal(50)
+        })
     })
-    it("withdraw", async () => {
-        await token.approve(contract.address, 50)
-        await defter.closeLine(2000000000, token.address, 50)
+    describe("withdraw", async () => {
+        it("withdraws", async () => {
+            await token.approve(contract.address, 50)
+            await defter.closeLine(2000000000, token.address, 50)
 
-        const hashedLine = ethers.utils.solidityKeccak256(
-            ["bytes", "uint256", "address"],
-            [owner, 2000000000, token.address],
-        )
+            const hashedLine = ethers.utils.solidityKeccak256(
+                ["bytes", "uint256", "address"],
+                [owner, 2000000000, token.address],
+            )
 
-        const balanceBefore = (await token.balanceOf(addr2)).toNumber()
+            const balanceBefore = (await token.balanceOf(addr2)).toNumber()
 
-        await defter.withdraw(hashedLine, token.address, s2)
+            await defter.withdraw(hashedLine, token.address, s2)
 
-        const balanceAfter = (await token.balanceOf(addr2)).toNumber()
+            const balanceAfter = (await token.balanceOf(addr2)).toNumber()
 
-        expect(balanceAfter - balanceBefore).to.equal(30)
+            expect(balanceAfter - balanceBefore).to.equal(30)
+        })
     })
 })
