@@ -75,23 +75,19 @@ describe("Wallet", async () => {
         //     await defter.contract.removeAllListeners("LineOpened")
         // })
         it("turns on listener", async () => {
-            //     await defter.contract.removeAllListeners(
-            //         "LineOpened",
-            //     )
-
-            // filter kullanabiliyorum, veya direkt "LineOpened" yazabiliyorum wallet icinde
+            // filter kullanabiliyorum, veya direkt "LineOpened" yazabiliyorum wallet icinde/ hangisi??
             const filter = await defter.contract.filters.LineOpened(owner)
 
-            await defter.openLineListenerOn(filter, () => {
+            defter.openLineListenerOn(filter, () => {
                 console.log("cb working")
             })
 
             await defter.openLine(2000000000, token.address, [addr1], [50])
 
-            await defter.contract.removeAllListeners("LineOpened")
+            // await defter.contract.removeAllListeners()
         })
-        it("turns off listener", async () => {
-            await defter.openLineListenerOff()
+        xit("turns off listener", async () => {
+            await defter.removeAllListeners()
         })
         xit("gets past events", async () => {
             const result = await defter.openedLines(0, 999)

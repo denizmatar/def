@@ -6,7 +6,7 @@ import { Defter__factory } from "./src/contracts/factories/Defter__factory"
 export class Wallet {
     address: string
     provider: any
-    contract: any // defter yap
+    contract: any // defter yapinca contract kiziyor anlamadim, bir de queryler patliyor
     signer: any
 
     abi = Defter__factory.abi
@@ -64,24 +64,23 @@ export class Wallet {
     }
 
     // LISTENERS ON
-    async openLineListenerOn(filter: any, cb: any) {
-        await this.contract.on(
+    openLineListenerOn(filter: any, cb: any) {
+        this.contract.on(
             filter,
             (
                 from: string,
                 receiver: string,
                 amount: number,
                 lineID: string,
-                event: any,
+                // event: any,
             ) => {
-                event.removeListener()
                 cb()
             },
         )
     }
 
-    async transferLineListenerOn(cb: any) {
-        await this.contract.on(
+    transferLineListenerOn(cb: any) {
+        this.contract.on(
             "LineTransferred",
             (from: string, lineID: string, totalAmount: number) => {
                 cb()
@@ -89,8 +88,8 @@ export class Wallet {
         )
     }
 
-    async closeLineListenerOn(cb: any) {
-        await this.contract.on(
+    closeLineListenerOn(cb: any) {
+        this.contract.on(
             "LineClosed",
             (from: string, lineID: string, totalAmount: number) => {
                 cb()
@@ -98,8 +97,8 @@ export class Wallet {
         )
     }
 
-    async withdrawListenerOn(cb: any) {
-        await this.contract.on(
+    withdrawListenerOn(cb: any) {
+        this.contract.on(
             "Withdrawn",
             (from: string, lineID: string, amount: number) => {
                 cb()
@@ -108,23 +107,27 @@ export class Wallet {
     }
 
     // LISTENERS OFF
-    async openLineListenerOff() {
-        await this.contract.off("LineOpened", () => {})
+    openLineListenerOff() {
+        this.contract.off("LineOpened", () => {})
     }
 
-    async transferLineListenerOff() {
-        await this.contract.off("LineTransferred", () => {})
+    transferLineListenerOff() {
+        this.contract.off("LineTransferred", () => {})
     }
 
-    async closeLineListenerOff() {
-        await this.contract.off("LineClosed", () => {})
+    closeLineListenerOff() {
+        this.contract.off("LineClosed", () => {})
     }
 
-    async withdrawListenerOff() {
-        await this.contract.off("Withdrawn", () => {})
+    withdrawListenerOff() {
+        this.contract.off("Withdrawn", () => {})
     }
 
-    // QUERY
+    removeAllListeners(event: any = undefined) {
+        this.contract.removeAllListeners(event)
+    }
+
+    // QUERY EVENT LOGS
     async openedLines(start: number, end: number) {
         return await this.contract.queryFilter("LineOpened", start, end)
     }
