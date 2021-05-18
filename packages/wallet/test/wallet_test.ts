@@ -5,12 +5,15 @@ import { Wallet } from "../wallet"
 import { Defter } from "../src/contracts/Defter"
 import { Defter__factory } from "../src/contracts/factories/Defter__factory"
 import { MTRToken__factory } from "../src/contracts/factories/MTRToken__factory"
+import { time } from "console"
 
 let defter: Wallet
 let token: any
 let contract: any // Defter yapinca 'contract' kiziyor
 
-const provider = new ethers.providers.JsonRpcProvider("http://127.0.0.1:7545")
+const provider = new ethers.providers.JsonRpcProvider("http://127.0.0.1:8545")
+
+let hashedLine: string
 
 // =============================
 // Get Addresses...
@@ -58,27 +61,25 @@ describe("Wallet", async () => {
             [addr1, addr2],
             [20, 30],
         )
+
+        hashedLine = ethers.utils.solidityKeccak256(
+            ["bytes", "uint256", "address"],
+            [owner, 2000000000, token.address],
+        )
     })
     describe("openLine", async () => {
         it("opens line", async () => {
-            const hashedLine = ethers.utils.solidityKeccak256(
-                ["bytes", "uint256", "address"],
-                [owner, 2000000000, token.address],
-            )
-
             const balance = (
                 await defter.getBalances(hashedLine, addr2)
             ).toNumber()
+
             expect(balance).to.equal(30)
         })
-        // after(async () => {
-        //     await defter.contract.removeAllListeners("LineOpened")
-        // })
-        it("turns on listener", async () => {
+        xit("turns on listener", async () => {
             // filter kullanabiliyorum, veya direkt "LineOpened" yazabiliyorum wallet icinde/ hangisi??
-            const filter = await defter.contract.filters.LineOpened(owner)
+            // const filter = await defter.contract.filters.LineOpened(owner)
 
-            defter.openLineListenerOn(filter, () => {
+            defter.openLineListenerOn(() => {
                 console.log("cb working")
             })
 
@@ -87,26 +88,29 @@ describe("Wallet", async () => {
             // await defter.contract.removeAllListeners()
         })
         xit("turns off listener", async () => {
-            await defter.removeAllListeners()
+            defter.removeAllListeners()
         })
-        xit("gets past events", async () => {
-            const result = await defter.openedLines(0, 999)
-            console.log(result)
+        it("gets past events", async () => {
+            const result = await defter.openedLines(0, 99999)
+            expect(result).to.not.be.empty
         })
     })
     describe("transferLine", async () => {
         it("transfers line", async () => {
-            const hashedLine = ethers.utils.solidityKeccak256(
-                ["bytes", "uint256", "address"],
-                [owner, 2000000000, token.address],
-            )
-
             await defter.transferLine(hashedLine, [addr1], [30], s2)
 
             const balance = (
                 await defter.getBalances(hashedLine, addr1)
             ).toNumber()
+
             expect(balance).to.equal(50)
+        })
+        it("gets past events", async () => {
+            await defter.transferLine(hashedLine, [addr1], [30], s2)
+
+            const result = await defter.transferredLines(0, 99999)
+
+            expect(result).to.not.be.empty
         })
     })
     describe("closeLine", async () => {
@@ -126,16 +130,18 @@ describe("Wallet", async () => {
 
             expect(balanceAfter - balanceBefore).to.equal(50)
         })
+        it("gets past events", async () => {
+            await token.approve(contract.address, 50)
+            await defter.closeLine(2000000000, token.address, 50)
+
+            const result = await defter.closedLines(0, 99999)
+            expect(result).to.not.be.empty
+        })
     })
     describe("withdraw", async () => {
         it("withdraws", async () => {
             await token.approve(contract.address, 50)
             await defter.closeLine(2000000000, token.address, 50)
-
-            const hashedLine = ethers.utils.solidityKeccak256(
-                ["bytes", "uint256", "address"],
-                [owner, 2000000000, token.address],
-            )
 
             const balanceBefore = (await token.balanceOf(addr2)).toNumber()
 
@@ -144,6 +150,15 @@ describe("Wallet", async () => {
             const balanceAfter = (await token.balanceOf(addr2)).toNumber()
 
             expect(balanceAfter - balanceBefore).to.equal(30)
+        })
+        it("gets past events", async () => {
+            await token.approve(contract.address, 50)
+            await defter.closeLine(2000000000, token.address, 50)
+            await defter.withdraw(hashedLine, token.address, s2)
+
+            const result = await defter.withdrawns(0, 99999)
+
+            expect(result).to.not.be.empty
         })
     })
 })

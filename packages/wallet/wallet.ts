@@ -64,9 +64,9 @@ export class Wallet {
     }
 
     // LISTENERS ON
-    openLineListenerOn(filter: any, cb: any) {
+    openLineListenerOn(cb: any) {
         this.contract.on(
-            filter,
+            "LineOpened",
             (
                 from: string,
                 receiver: string,
@@ -108,19 +108,23 @@ export class Wallet {
 
     // LISTENERS OFF
     openLineListenerOff() {
-        this.contract.off("LineOpened", () => {})
+        // this.contract.off("LineOpened", () => {}) //bunlar biraz garip davraniyor. removeAll stabil calisiyor
+        this.removeAllListeners("LineOpened")
     }
 
     transferLineListenerOff() {
-        this.contract.off("LineTransferred", () => {})
+        // this.contract.off("LineTransferred", () => {})
+        this.removeAllListeners("LineTransferred")
     }
 
     closeLineListenerOff() {
-        this.contract.off("LineClosed", () => {})
+        // this.contract.off("LineClosed", () => {})
+        this.removeAllListeners("LineClosed")
     }
 
     withdrawListenerOff() {
-        this.contract.off("Withdrawn", () => {})
+        // this.contract.off("Withdrawn", () => {})
+        this.removeAllListeners("Withdrawn")
     }
 
     removeAllListeners(event: any = undefined) {

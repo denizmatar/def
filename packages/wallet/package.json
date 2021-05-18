@@ -4,8 +4,6 @@
         "@typechain/ethers-v5": "^7.0.0",
         "chai": "^4.3.4",
         "ethers": "^5.1.4",
-        "hardhat": "^2.2.1",
-        "hardhat-deploy-ethers": "*",
         "mkdirp": "^1.0.4",
         "mocha": "^7.2.0",
         "openzeppelin-solidity": "^4.1.0"
