@@ -132,40 +132,41 @@ export class Wallet {
     }
 
     // GENERATE FILTERS
-    openLineFilter(from: string, lineID: string) {
+    // Call without arguments to use for all events
+    openLineFilter(from: any = null, lineID: any = null) {
         return this.contract.filters.LineOpened(from, null, null, lineID)
     }
 
-    transferLineFilter(from: string, lineID: string) {
+    transferLineFilter(from: any = null, lineID: any = null) {
         return this.contract.filters.LineTransferred(from, null, null, lineID)
     }
 
-    closeLineFilter(from: string, lineID: string) {
+    closeLineFilter(from: any = null, lineID: any = null) {
         return this.contract.filters.LineClosed(from, lineID, null)
     }
 
-    withdrawFilter(from: string, lineID: string) {
+    withdrawFilter(from: any = null, lineID: any = null) {
         return this.contract.filters.Withdrawn(from, lineID, null)
     }
 
     // QUERY EVENT LOGS
-    async openedLines(filter: any = "LineOpened", start: number, end: number) {
+    async openedLines(start: number, end: number, filter: any = "LineOpened") {
         return await this.contract.queryFilter(filter, start, end)
     }
 
     async transferredLines(
-        filter: any = "LineTransferred",
         start: number,
         end: number,
+        filter: any = "LineTransferred",
     ) {
         return await this.contract.queryFilter(filter, start, end)
     }
 
-    async closedLines(filter: any = "LineClosed", start: number, end: number) {
+    async closedLines(start: number, end: number, filter: any = "LineClosed") {
         return await this.contract.queryFilter(filter, start, end)
     }
 
-    async withdrawns(filter: any = "Withdrawn", start: number, end: number) {
+    async withdrawns(start: number, end: number, filter: any = "Withdrawn") {
         return await this.contract.queryFilter(filter, start, end)
     }
 

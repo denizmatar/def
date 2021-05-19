@@ -90,8 +90,16 @@ describe("Wallet", async () => {
         xit("turns off listener", async () => {
             defter.removeAllListeners()
         })
-        it("gets past events", async () => {
+        it("gets all past events", async () => {
             const result = await defter.openedLines(0, 99999)
+            expect(result).to.not.be.empty
+        })
+        it("filters past events", async () => {
+            await defter.openLine(2000000000, token.address, [addr2], [50], s1)
+
+            const filter = defter.openLineFilter(addr1)
+            const result = await defter.openedLines(0, 99999, filter)
+
             expect(result).to.not.be.empty
         })
     })
@@ -109,6 +117,14 @@ describe("Wallet", async () => {
             await defter.transferLine(hashedLine, [addr1], [30], s2)
 
             const result = await defter.transferredLines(0, 99999)
+
+            expect(result).to.not.be.empty
+        })
+        it("filters past events", async () => {
+            await defter.transferLine(hashedLine, [addr1], [30], s2)
+
+            const filter = defter.transferLineFilter(addr2)
+            const result = await defter.transferredLines(0, 99999, filter)
 
             expect(result).to.not.be.empty
         })
@@ -137,6 +153,15 @@ describe("Wallet", async () => {
             const result = await defter.closedLines(0, 99999)
             expect(result).to.not.be.empty
         })
+        it("filters past events", async () => {
+            await token.approve(contract.address, 50)
+            await defter.closeLine(2000000000, token.address, 50)
+
+            const filter = defter.closeLineFilter(owner)
+            const result = await defter.closedLines(0, 99999, filter)
+
+            expect(result).to.not.be.empty
+        })
     })
     describe("withdraw", async () => {
         it("withdraws", async () => {
@@ -157,6 +182,16 @@ describe("Wallet", async () => {
             await defter.withdraw(hashedLine, token.address, s2)
 
             const result = await defter.withdrawns(0, 99999)
+
+            expect(result).to.not.be.empty
+        })
+        it("filters past events", async () => {
+            await token.approve(contract.address, 50)
+            await defter.closeLine(2000000000, token.address, 50)
+            await defter.withdraw(hashedLine, token.address, s2)
+
+            const filter = await defter.withdrawFilter(addr2)
+            const result = await defter.withdrawns(0, 99999, filter)
 
             expect(result).to.not.be.empty
         })
