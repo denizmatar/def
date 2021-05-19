@@ -131,20 +131,47 @@ export class Wallet {
         this.contract.removeAllListeners(event)
     }
 
+    // GENERATE FILTERS
+    openLineFilter(from: string, lineID: string) {
+        return this.contract.filters.LineOpened(from, null, null, lineID)
+    }
+
+    transferLineFilter(from: string, lineID: string) {
+        return this.contract.filters.LineTransferred(from, null, null, lineID)
+    }
+
+    closeLineFilter(from: string, lineID: string) {
+        return this.contract.filters.LineClosed(from, lineID, null)
+    }
+
+    withdrawFilter(from: string, lineID: string) {
+        return this.contract.filters.Withdrawn(from, lineID, null)
+    }
+
     // QUERY EVENT LOGS
-    async openedLines(start: number, end: number) {
-        return await this.contract.queryFilter("LineOpened", start, end)
+    async openedLines(filter: any = "LineOpened", start: number, end: number) {
+        return await this.contract.queryFilter(filter, start, end)
     }
 
-    async transferredLines(start: number, end: number) {
-        return await this.contract.queryFilter("LineTransferred", start, end)
+    async transferredLines(
+        filter: any = "LineTransferred",
+        start: number,
+        end: number,
+    ) {
+        return await this.contract.queryFilter(filter, start, end)
     }
 
-    async closedLines(start: number, end: number) {
-        return await this.contract.queryFilter("LineClosed", start, end)
+    async closedLines(filter: any = "LineClosed", start: number, end: number) {
+        return await this.contract.queryFilter(filter, start, end)
     }
 
-    async withdrawns(start: number, end: number) {
-        return await this.contract.queryFilter("Withdrawn", start, end)
+    async withdrawns(filter: any = "Withdrawn", start: number, end: number) {
+        return await this.contract.queryFilter(filter, start, end)
+    }
+
+    // IPTAL GIBI
+    // QUERY EVENT LOGS (FILTERED)
+    async getLogs(filter: any) {
+        return this.provider.getLogs(filter)
     }
 }
