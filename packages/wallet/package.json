@@ -18,5 +18,9 @@
         "generate_contract_wrappers": "npm run generate_contract_wrappers:clean && npm run generate_contract_wrappers:typechain",
         "generate_contract_wrappers:clean": "rm -rf src/contracts",
         "generate_contract_wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../contracts/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'"
-    }
+    },
+    "private": true,
+    "workspaces": [
+        "./*"
+    ]
 }

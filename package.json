@@ -1,5 +1,5 @@
 {
-  "name": "defterhane",
+  "name": "def",
   "version": "1.0.0",
   "description": "",
   "author": "Deniz Matar",
@@ -7,13 +7,13 @@
     "type": "git",
     "url": "git+https://github.com/denizmatar/def.git"
   },
+  "private": true,
   "workspaces": [
-    "packages/def",
-    "packages/wallet"
+    "packages/*"
   ],
   "scripts": {
     "compile": "npm run compile",
     "test": "npm test",
-    "postinstall": "(cd packages/def && npm i); (cd packages/wallet && npm i)"
+    "postinstall": "(cd packages/contracts && yarn install); (cd packages/wallet && yarn install)"
   }
 }
