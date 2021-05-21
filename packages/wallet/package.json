@@ -14,9 +14,9 @@
         "@types/node": "^15.0.2"
     },
     "scripts": {
-        "test": "tsc ./test/wallet_test.ts && ./node_modules/mocha/bin/mocha ./test",
+        "test": "rm ./test/wallet_test.js && tsc ./test/wallet_test.ts && ./node_modules/mocha/bin/mocha ./test",
         "generate_contract_wrappers": "npm run generate_contract_wrappers:clean && npm run generate_contract_wrappers:typechain",
         "generate_contract_wrappers:clean": "rm -rf src/contracts",
-        "generate_contract_wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../def/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'"
+        "generate_contract_wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../contracts/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'"
     }
 }

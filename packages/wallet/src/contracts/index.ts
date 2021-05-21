@@ -2,7 +2,9 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { Defter } from "./Defter";
+export type { IERC20 } from "./IERC20";
 export type { MTRToken } from "./MTRToken";
 
 export { Defter__factory } from "./factories/Defter__factory";
+export { IERC20__factory } from "./factories/IERC20__factory";
 export { MTRToken__factory } from "./factories/MTRToken__factory";

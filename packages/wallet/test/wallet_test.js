@@ -39,7 +39,7 @@ exports.__esModule = true;
 var chai_1 = require("chai");
 var mocha_1 = require("mocha");
 var ethers = require("ethers");
-var wallet_1 = require("../wallet");
+var wallet_1 = require("../src/wallet");
 var Defter__factory_1 = require("../src/contracts/factories/Defter__factory");
 var MTRToken__factory_1 = require("../src/contracts/factories/MTRToken__factory");
 var defter;

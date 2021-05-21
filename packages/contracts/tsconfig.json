@@ -1,4 +1,5 @@
 {
+    "extends": "../../tsconfig-base.json",
     "compilerOptions": {
         "target": "es2018",
         "module": "commonjs",
@@ -10,5 +11,6 @@
         "types": ["@nomiclabs/hardhat-ethers", "@nomiclabs/hardhat-waffle"]
     },
     "include": ["./test", "./scripts", "./typechain"],
+    "exclude": ["node_modules"],
     "files": ["./hardhat.config.ts"]
 }

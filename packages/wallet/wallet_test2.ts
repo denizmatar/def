@@ -1,20 +1,53 @@
 import { Wallet } from "./wallet"
 import * as ethers from "ethers"
-import { formatBytes32String } from "@ethersproject/strings"
 
 // let wallet = new Wallet;
 
 async function test() {
-    const defter = new Wallet("0xF0E0ccf33315d40D05bC2a38536fb4351F2c5Df8")
-    const provider = defter.provider
+    const provider = new ethers.providers.JsonRpcProvider(
+        "http://127.0.0.1:8545",
+    )
+
+    const defter = new Wallet(
+        "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        provider,
+    )
+    // const provider = defter.provider
     const contract = defter.contract
 
-    const tokenAddress = "0x9d88346B94AF9875A327f59f019A2751F6184344"
+    const tokenAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
 
-    const owner = "0x75340d6fb6D18e7bdD8e74f0f1c89296Cce23821"
-    const addr1 = "0x9525F51Ca7fA140a6c3B1099A76413D39E61e356"
-    const addr2 = "0x8ACF325Fa27836AdC91DB4a792bf345DE11480c6"
-    const addr3 = "0xE69D2c7F446Cd7fB7d5776E0B24c1C2D3082F916"
+    const owner = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+    const addr1 = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+    const addr2 = "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc"
+    // const addr3 = "0xE69D2c7F446Cd7fB7d5776E0B24c1C2D3082F916"
+
+    // const result = await defter.openedLines(0, 999)
+
+    // console.log(result)
+
+    const hashedLine = ethers.utils.solidityKeccak256(
+        ["bytes", "uint256", "address"],
+        [owner, 2000000000, tokenAddress],
+    )
+
+    defter.openLineListenerOn(() => {
+        console.log("working")
+    })
+
+    defter.transferLineListenerOn(() => {
+        console.log("tworking")
+    })
+
+    // await defter.openLine(2000000000, tokenAddress, [addr1], [50])
+
+    // await defter.transferLine(hashedLine, [addr2], [50], provider.getSigner(1))
+
+    // await defter.openLine(2000000000, tokenAddress, [addr2], [50])
+
+    // defter.openLineListenerOff()
+    // defter.removeAllListeners()
+    // defter.removeAllListeners("LineOpened")
 
     // const addr1 = defter.getSigners(1)
     // const addr2 = defter.getSigners(2)
@@ -47,7 +80,7 @@ async function test() {
 
     // console.log(results)
 
-    await contract.openLine(2000000000, tokenAddress, [addr1], [10])
+    // await contract.openLine(2000000000, tokenAddress, [addr1], [10])
     // await contract.openLine(2000000000, tokenAddress, [addr1], [10])
     // await contract.openLine(2000000000, tokenAddress, [addr1], [10])
 
