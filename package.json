@@ -1,19 +1,20 @@
 {
-  "name": "def",
-  "version": "1.0.0",
-  "description": "",
-  "author": "Deniz Matar",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/denizmatar/def.git"
-  },
-  "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
-  "scripts": {
-    "compile": "npm run compile",
-    "test": "npm test",
-    "postinstall": "(cd packages/contracts && yarn install); (cd packages/wallet && yarn install)"
-  }
+    "name": "def",
+    "version": "1.0.0",
+    "description": "",
+    "author": "Deniz Matar",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/denizmatar/def.git"
+    },
+    "private": true,
+    "workspaces": [
+        "def",
+        "wallet"
+    ],
+    "scripts": {
+        "build": "(cd packages/contracts && yarn install); (cd packages/wallet && yarn install)",
+        "test": "(cd packages/contracts && yarn test); (cd packages/wallet && yarn test)",
+        "clean": "(cd packages/contracts && yarn clean); (cd packages/wallet && yarn clean)"
+    }
 }

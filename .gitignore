@@ -1,8 +1,8 @@
-packages/def/node_modules
-packages/def/cache
-packages/def/artifacts
-packages/def/scripts
-packages/def/typechain
+packages/contracts/node_modules
+packages/contracts/cache
+packages/contracts/artifacts
+packages/contracts/scripts
+packages/contracts/typechain
 packages/wallet/node_modules
 node_modules
 .idea
