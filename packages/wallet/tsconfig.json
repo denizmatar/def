@@ -7,6 +7,6 @@
         "rootDir": ".",
         "outDir": "lib/"
     },
-    "include": ["src/**/*", "test/**/*"],
+    "include": ["src/**/*", "test/**/*", "lib/**/*"],
     "exclude": ["node_modules"]
 }

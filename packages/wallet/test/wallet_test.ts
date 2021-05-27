@@ -2,9 +2,9 @@ import { expect } from "chai"
 import { describe, beforeEach, it, after } from "mocha"
 import * as ethers from "ethers"
 import { Wallet } from "../src/wallet"
-import { Defter } from "../src/contracts/Defter"
-import { Defter__factory } from "../src/contracts/factories/Defter__factory"
-import { MTRToken__factory } from "../src/contracts/factories/MTRToken__factory"
+import { Defter } from "../lib/src/contracts/Defter"
+import { Defter__factory } from "../lib/src/contracts/factories/Defter__factory"
+import { MTRToken__factory } from "../lib/src/contracts/factories/MTRToken__factory"
 import { time } from "console"
 
 let defter: Wallet
