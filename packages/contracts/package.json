@@ -1,6 +1,7 @@
 {
     "name": "@def/contracts",
     "version": "0.1.0",
+    "license": "UNLICENSED",
     "devDependencies": {
         "@nomiclabs/hardhat-ethers": "^2.0.2",
         "@nomiclabs/hardhat-waffle": "^2.0.1",

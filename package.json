@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "description": "",
     "author": "Deniz Matar",
+    "license": "UNLICENSED",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/denizmatar/def.git"

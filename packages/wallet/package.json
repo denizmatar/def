@@ -1,6 +1,7 @@
 {
     "name": "@def/wallet",
     "version": "0.1.0",
+    "license": "UNLICENSED",
     "dependencies": {
         "ethers": "^5.1.4"
     },
