@@ -6,3 +6,4 @@ packages/contracts/typechain
 packages/wallet/node_modules
 node_modules
 .idea
+lib

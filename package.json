@@ -9,12 +9,12 @@
     },
     "private": true,
     "workspaces": [
-        "def",
-        "wallet"
+        "packages/contracts",
+        "packages/wallet"
     ],
     "scripts": {
-        "build": "(cd packages/contracts && yarn install); (cd packages/wallet && yarn install)",
-        "test": "(cd packages/contracts && yarn test); (cd packages/wallet && yarn test)",
-        "clean": "(cd packages/contracts && yarn clean); (cd packages/wallet && yarn clean)"
+        "build": "yarn workspaces run build",
+        "test": "yarn workspaces run test",
+        "clean": "yarn workspaces run clean"
     }
 }

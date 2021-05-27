@@ -4,7 +4,8 @@
         "target": "es6",
         "resolveJsonModule": true,
         "esModuleInterop": true,
-        "rootDir": "."
+        "rootDir": ".",
+        "outDir": "lib/"
     },
     "include": ["src/**/*", "test/**/*"],
     "exclude": ["node_modules"]

@@ -1,5 +1,6 @@
 {
-    "name": "def",
+    "name": "@def/contracts",
+    "version": "0.1.0",
     "devDependencies": {
         "@nomiclabs/hardhat-ethers": "^2.0.2",
         "@nomiclabs/hardhat-waffle": "^2.0.1",
@@ -27,6 +28,7 @@
         "openzeppelin-solidity": "^4.0.0"
     },
     "scripts": {
+        "build": "yarn compile",
         "compile": "hardhat compile",
         "test": "yarn compile && hardhat test",
         "clean": "hardhat clean"
