@@ -1,7 +1,7 @@
 import { ethers } from "ethers"
 import { eventNames } from "process"
-import { Defter } from "../lib/src/contracts/Defter"
-import { Defter__factory } from "../lib/src/contracts/factories/Defter__factory"
+import { Defter } from "../src/contracts/Defter"
+import { Defter__factory } from "../src/contracts/factories/Defter__factory"
 
 export class Wallet {
     address: string
