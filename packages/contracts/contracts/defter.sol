@@ -1,60 +1,8 @@
-//SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-// import "hardhat/console.sol";
-// import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-
-interface IERC20 {
-    function totalSupply() external view returns (uint256);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address recipient, uint256 amount)
-        external
-        returns (bool);
-
-    function allowance(address owner, address spender)
-        external
-        view
-        returns (uint256);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
-
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(
-        address indexed owner,
-        address indexed spender,
-        uint256 value
-    );
-}
+import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
 contract Defter {
-    /*
-    BALANCES:
-    {
-        lineID1: {
-            receiver1: amount,
-            receiver2: amount,
-            receiver3: amount
-            },
-        lineID2: {
-            receiver4: amount,
-            receiver5: amount,
-            receiver6: amount
-            },
-        lineID3: {
-            receiver7: amount,
-            receiver8: amount
-            }
-    }
-    */
-
     struct Line {
         bool isOpen;
         uint256 totalAmount;
@@ -65,28 +13,24 @@ contract Defter {
     mapping(bytes32 => mapping(address => uint256)) balances;
 
     event LineOpened(
-        address indexed from,
-        address receiver,
-        uint256 amount,
-        bytes32 indexed lineID
+        bytes32 indexed lineID,
+        address indexed issuer,
+        address unit,
+        uint256 maturityDate
     );
 
     event LineTransferred(
-        address indexed from,
-        address receiver,
-        uint256 amount,
-        bytes32 indexed lineID
+        bytes32 indexed lineID,
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount
     );
 
-    event LineClosed(
-        address indexed from,
-        bytes32 indexed lineID,
-        uint256 totalAmount
-    );
+    event LineClosed(bytes32 indexed lineID, address indexed issuer);
 
     event Withdrawn(
-        address indexed from,
         bytes32 indexed lineID,
+        address indexed receiver,
         uint256 amount
     );
 
@@ -107,31 +51,19 @@ contract Defter {
     }
 
     function openLine(
-        uint256 _maturityDate,
-        address _unit,
-        address[] calldata _receivers,
-        uint256[] calldata _amounts
+        uint256 maturityDate,
+        address unit,
+        address receiver,
+        uint256 amount
     ) external {
         require(
-            _maturityDate > (block.timestamp + 1 days),
+            maturityDate > (block.timestamp + 1 days),
             "can't open line for such a date this close"
         );
-        require(
-            _receivers.length > 0 && _amounts.length > 0,
-            "missing receivers or amounts"
-        );
-        require(
-            _receivers.length == _amounts.length,
-            "number of receivers and amounts don't match"
-        );
-
-        bytes32 _lineID = hashLine(msg.sender, _maturityDate, _unit);
-
-        lines[_lineID].isOpen = true;
-
-        for (uint256 i = 0; i < _receivers.length; i++) {
-            openLineHelper(_lineID, _receivers[i], _amounts[i]);
-        }
+        bytes32 lineID = hashLine(msg.sender, maturityDate, unit);
+        lines[lineID].isOpen = true;
+        openLineHelper(lineID, receiver, amount);
+        emit LineOpened(lineID, msg.sender, unit, maturityDate);
     }
 
     function openLineHelper(
@@ -143,30 +75,10 @@ contract Defter {
         require(_amount != 0, "can't open line for 0 amount");
         balances[_lineID][_receiver] += _amount;
         lines[_lineID].totalAmount += _amount;
-        emit LineOpened(msg.sender, _receiver, _amount, _lineID);
+        emit LineTransferred(_lineID, msg.sender, _receiver, _amount);
     }
 
     function transferLine(
-        bytes32 _lineID,
-        address[] calldata _receivers,
-        uint256[] calldata _amounts
-    ) external {
-        require(balances[_lineID][msg.sender] > 0, "sender has 0 balance");
-        require(
-            _receivers.length > 0 && _amounts.length > 0,
-            "missing receivers or amounts"
-        );
-        require(
-            _receivers.length == _amounts.length,
-            "number of receivers and amounts don't match"
-        );
-
-        for (uint256 i = 0; i < _receivers.length; i++) {
-            transferLineHelper(_lineID, _receivers[i], _amounts[i]);
-        }
-    }
-
-    function transferLines(
         bytes32[] calldata _lineIDs,
         uint256[] calldata _amounts,
         address _receiver
@@ -185,7 +97,6 @@ contract Defter {
                 balances[_lineIDs[i]][msg.sender] > 0,
                 "sender has 0 balance" // should we specify the lineID here?
             );
-
             transferLineHelper(_lineIDs[i], _receiver, _amounts[i]);
         }
     }
@@ -199,7 +110,7 @@ contract Defter {
         require(_amount != 0, "can't transfer 0 amount");
         balances[_lineID][msg.sender] -= _amount;
         balances[_lineID][_receiver] += _amount;
-        emit LineTransferred(msg.sender, _receiver, _amount, _lineID);
+        emit LineTransferred(_lineID, msg.sender, _receiver, _amount);
     }
 
     function closeLine(
@@ -207,34 +118,20 @@ contract Defter {
         address _unit,
         uint256 _totalAmount
     ) external {
-        // total amount parametre olarak alsin, ve front'end hesaplayip gondersin.
-        // cunku burda for loop yapmak zorundayim, gereksiz maliyet gibi geldi.
-        // balances[_linedID][0] yazmissin ama address bekledigini soyluyor bana
-
         bytes32 _lineID = hashLine(msg.sender, _maturityDate, _unit);
-
         require(_totalAmount == lines[_lineID].totalAmount);
-
         IERC20 token = IERC20(_unit);
         token.transferFrom(msg.sender, address(this), _totalAmount);
-
         lines[_lineID].isOpen = false;
-
-        emit LineClosed(msg.sender, _lineID, _totalAmount);
+        emit LineClosed(_lineID, msg.sender);
     }
 
     function withdraw(bytes32 _lineID, address _unit) external {
         uint256 amount = balances[_lineID][msg.sender];
         IERC20 token = IERC20(_unit);
-
-        if (amount > 0) {
-            balances[_lineID][msg.sender] = 0;
-
-            if (!token.transfer(msg.sender, amount)) {
-                balances[_lineID][msg.sender] = amount;
-            } else {
-                emit Withdrawn(msg.sender, _lineID, amount);
-            }
-        }
+        require(amount > 0, "");
+        token.transfer(msg.sender, amount);
+        balances[_lineID][msg.sender] = 0;
+        emit Withdrawn(_lineID, msg.sender, amount);
     }
 }
