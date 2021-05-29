@@ -21,7 +21,7 @@
         "wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../contracts/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'",
         "wrappers:clean": "rm -rf src/contracts",
         "ts:clean": "rm -rf lib",
-        "ts:build": "tsc -b",
+        "ts:build": "yarn ts:clean && tsc -b",
         "build": "yarn wrappers:generate && yarn ts:build",
         "clean": "yarn wrappers:clean && yarn ts:clean",
         "test": "yarn build && mocha -r ts-node/register lib/test/*.js --exit"

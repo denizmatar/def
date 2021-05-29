@@ -4,6 +4,7 @@ packages/contracts/artifacts
 packages/contracts/scripts
 packages/contracts/typechain
 packages/wallet/node_modules
+packages/wallet/lib
 node_modules
 .idea
 lib
