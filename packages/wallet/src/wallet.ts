@@ -1,6 +1,5 @@
 import { hashMessage } from '@ethersproject/hash';
 import { BigNumber, ethers } from 'ethers';
-import { isAnyArrayBuffer } from 'util/types';
 import { Defter } from '../src/contracts/Defter';
 import { Defter__factory } from '../src/contracts/factories/Defter__factory';
 
@@ -22,7 +21,7 @@ export interface Line {
 	status: LineStatus;
 }
 
-export interface LogSend {
+export interface LogSent {
 	date: Date;
 	amount: ethers.BigNumber;
 	receiver: string;
@@ -47,15 +46,19 @@ export interface LogReceived {
 }
 
 export class Wallet {
-	pendingHistory: { [lineID: string]: Array<LogPending> } = {};
-	senderHistory: { [lineID: string]: Array<LogSend> } = {};
-	receiverHistory: { [lineID: string]: Array<LogReceived> } = {};
+	// tx yolladim ama cevap bekliyoruz
+	pendingHistory = new Map<string, LogPending[]>(); // array olcak logpending
+	// yeni bir open veya transfer
+	senderHistory = new Map<string, LogSent[]>();
+	// bana gelenler
+	receiverHistory = new Map<string, LogReceived[]>();
 
 	lines: { [lineID: string]: Line } = {};
 
 	contract: Defter;
 	walletAddress: string;
 
+	// NEW INSTANCE
 	public static withProvider(contractAddress: string, walletAddress: string, provider: ethers.providers.Provider): Wallet {
 		return new Wallet(contractAddress, walletAddress, provider);
 	}
@@ -68,17 +71,10 @@ export class Wallet {
 	private constructor(contractAddress: string, walletAddress: string, provider: ethers.Signer | ethers.providers.Provider) {
 		this.contract = Defter__factory.connect(contractAddress, provider);
 		this.walletAddress = walletAddress;
+		this.initializer();
 	}
 
-	public static calculateLineID(issuerAddress: string, maturityDate: number, unit: string): string {
-		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [issuerAddress, maturityDate, unit]);
-		return lineID;
-	}
-
-	async getBalance(lineID: string, holder: string) {
-		return await this.contract.getBalances(lineID, holder);
-	}
-
+	// MAIN FUNCTIONS
 	async openLine(maturityDate: number, unit: string, receiver: string, amount: ethers.BigNumber): Promise<{ lineID: string; txHash: string }> {
 		const lineID = Wallet.calculateLineID(this.walletAddress, maturityDate, unit);
 		if (!this.lines[lineID]) {
@@ -92,7 +88,7 @@ export class Wallet {
 			this.lines[lineID] = line;
 		}
 		const tx = await this.contract.openLine(maturityDate, unit, receiver, amount);
-		this.pendingHistory[lineID].push({ amount, receiver, txHash: tx.hash, txType: TxType.TRANSFER, validated: false });
+		this.pushToPendingHistory(lineID, { amount, receiver, txHash: tx.hash, txType: TxType.ISSUE, validated: false });
 		return { lineID, txHash: tx.hash };
 	}
 
@@ -101,7 +97,7 @@ export class Wallet {
 		const size = lineIDs.length;
 		for (let i = 0; i < size; i++) {
 			const log = { date: new Date(), amount: amounts[i], receiver };
-			this.pendingHistory[lineIDs[i]].push({ amount: amounts[i], receiver, txHash: tx.hash, txType: TxType.TRANSFER, validated: false });
+			this.pushToPendingHistory(lineIDs[i], { amount: amounts[i], receiver, txHash: tx.hash, txType: TxType.TRANSFER, validated: false });
 		}
 	}
 
@@ -111,6 +107,52 @@ export class Wallet {
 
 	async withdraw(lineID: string, unit: string) {
 		await this.contract.withdraw(lineID, unit);
+	}
+
+	// GETTERS
+	async getBalance(lineID: string, holder: string) {
+		return await this.contract.getBalances(lineID, holder);
+	}
+
+	// EVENT FILTERS
+	private eventFilterOpenLine(lineID: string | null = null, issuer: string | null = null) {
+		return this.contract.filters.LineOpened(lineID, issuer, null, null);
+	}
+
+	private eventFilterTransferLine(lineID: string | null = null, sender: string | null = null, receiver: string | null = null) {
+		return this.contract.filters.LineTransferred(lineID, sender, receiver, null);
+	}
+
+	private eventFilterCloseLine(lineID: string | null = null, issuer: string | null = null) {
+		return this.contract.filters.LineClosed(lineID, issuer);
+	}
+
+	private eventFilterWithdrawn(lineID: string | null = null, receiver: string | null = null) {
+		return this.contract.filters.Withdrawn(lineID, receiver, null);
+	}
+
+	// QUERY EVENTS
+	private async initializer() {
+		const events = await this.contract.queryFilter(this.eventFilterTransferLine());
+
+		if (events.length != 0) {
+			for (let i = 0; i < events.length; i++) {
+				const event = events[i];
+				const lineID = event.args.lineID;
+				const sender = event.args.sender;
+				const receiver = event.args.receiver;
+				const amount = event.args.amount;
+				const txHash = event.transactionHash;
+				const logIndex = event.logIndex;
+
+				if (sender == this.walletAddress) {
+					// Am I pushing to the right location?
+					this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash, logIndex });
+				} else if (receiver == this.walletAddress) {
+					this.pushToReceiverHistory(lineID, { date: new Date(), amount, sender, txHash, logIndex });
+				}
+			}
+		}
 	}
 
 	async getLine(lineID: string): Promise<Line | null> {
@@ -129,39 +171,54 @@ export class Wallet {
 		};
 	}
 
+	// LISTENERS ON
 	public listenTransferLineAsSender() {
-		const filter = this.eventFilterTransferAsSender();
+		const filter = this.eventFilterTransferLine(null, this.walletAddress);
 		this.contract.on(filter, (lineID: string, sender: string, receiver: string, amount: ethers.BigNumber, event: ethers.Event) => {
-			this.senderHistory[lineID].push({ date: new Date(), amount, receiver, txHash: event.transactionHash, logIndex: event.logIndex });
-			for (let h of this.pendingHistory[lineID]) if ((h.txHash = event.transactionHash)) h.validated = true;
+			const history = this.pendingHistory.get(lineID);
+			// console.log(history);
+
+			if (history) {
+				for (let i = 0; i < history.length; i++) {
+					// console.log(history[i].txHash, event.transactionHash);
+
+					if (history[i].txHash == event.transactionHash) {
+						this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash: event.transactionHash, logIndex: event.logIndex });
+					}
+				}
+			}
 		});
 	}
 
 	public listenTransferLineAsReceiver() {
-		const filter = this.eventFilterTransferLineAsReceiver();
+		const filter = this.eventFilterTransferLine(null, null, this.walletAddress);
 		this.contract.on(filter, async (lineID: string, sender: string, receiver: string, amount: ethers.BigNumber, event: ethers.Event) => {
-			this.receiverHistory[lineID].push({ date: new Date(), amount, sender, txHash: event.transactionHash, logIndex: event.logIndex });
-			for (let h of this.pendingHistory[lineID]) if ((h.txHash = event.transactionHash)) h.validated = true;
+			const history = this.pendingHistory.get(lineID);
+			if (history) {
+				for (let i = 0; i < history.length; i++) {
+					if (history[i].txHash == event.transactionHash) {
+						this.pushToReceiverHistory(lineID, { date: new Date(), amount, sender, txHash: event.transactionHash, logIndex: event.logIndex });
+					}
+				}
+			}
 		});
 	}
 
-	// public listenOpenLineAsIssuer() {
-	// 	const filter = this.contract.filters.LineOpened(null, this.walletAddress, null);
-	// 	this.contract.on(filter, (lineID: string, issuer: string, unit: string, maturityDate: ethers.BigNumber, event: ethers.Event) => {});
-	// }
-
-	private eventFilterTransferLineAsReceiver(lineID: string | null = null) {
-		return this.contract.filters.LineTransferred(lineID, null, this.walletAddress, null);
+	public listenOpenLineAsIssuer() {
+		const filter = this.eventFilterTransferLine(null, this.walletAddress);
+		this.contract.on(filter, async (lineID: string, sender: string, receiver: string, amount: ethers.BigNumber, event: ethers.Event) => {
+			const history = this.pendingHistory.get(lineID);
+			if (history) {
+				for (let i = 0; i < history.length; i++) {
+					if (history[i].txHash == event.transactionHash) {
+						this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash: event.transactionHash, logIndex: event.logIndex });
+					}
+				}
+			}
+		});
 	}
 
-	private eventFilterTransferAsSender() {
-		return this.contract.filters.LineTransferred(null, this.walletAddress, null, null);
-	}
-
-	private eventFilterOpenLine(lineID: string) {
-		return this.contract.filters.LineOpened(lineID);
-	}
-
+	// LISTENERS OFF
 	private openLineListenerOff() {
 		this.removeAllListeners('LineOpened');
 	}
@@ -180,5 +237,47 @@ export class Wallet {
 
 	removeAllListeners(event: any = undefined) {
 		this.contract.removeAllListeners(event);
+	}
+
+	// HELPERS
+	public static calculateLineID(issuerAddress: string, maturityDate: number, unit: string): string {
+		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [issuerAddress, maturityDate, unit]);
+		return lineID;
+	}
+
+	private pushToPendingHistory(lineID: string, data: LogPending) {
+		let currentHistory: undefined | LogPending[] = this.pendingHistory.get(lineID);
+		if (currentHistory) {
+			currentHistory.push(data);
+			this.pendingHistory.set(lineID, currentHistory);
+		} else {
+			let tempArray: LogPending[] = [];
+			tempArray.push(data);
+			this.pendingHistory.set(lineID, tempArray);
+		}
+	}
+
+	private pushToSenderHistory(lineID: string, data: LogSent) {
+		let currentHistory: undefined | LogSent[] = this.senderHistory.get(lineID);
+		if (currentHistory) {
+			currentHistory.push(data);
+			this.senderHistory.set(lineID, currentHistory);
+		} else {
+			let tempArray: LogSent[] = [];
+			tempArray.push(data);
+			this.senderHistory.set(lineID, tempArray);
+		}
+	}
+
+	private pushToReceiverHistory(lineID: string, data: LogReceived) {
+		let currentHistory: undefined | LogReceived[] = this.receiverHistory.get(lineID);
+		if (currentHistory) {
+			currentHistory.push(data);
+			this.receiverHistory.set(lineID, currentHistory);
+		} else {
+			let tempArray: LogReceived[] = [];
+			tempArray.push(data);
+			this.receiverHistory.set(lineID, tempArray);
+		}
 	}
 }

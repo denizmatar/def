@@ -129,7 +129,7 @@ contract Defter {
     function withdraw(bytes32 _lineID, address _unit) external {
         uint256 amount = balances[_lineID][msg.sender];
         IERC20 token = IERC20(_unit);
-        require(amount > 0, "");
+        require(amount > 0, "amount can't be <= 0");
         token.transfer(msg.sender, amount);
         balances[_lineID][msg.sender] = 0;
         emit Withdrawn(_lineID, msg.sender, amount);
