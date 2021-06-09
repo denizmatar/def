@@ -22,7 +22,7 @@ describe("Defterhane", () => {
     await defter.deployed();
 
     const tokenFactory = await ethers.getContractFactory("MTRToken", owner);
-    token = (await tokenFactory.deploy(100)) as MtrToken;
+    token = (await tokenFactory.deploy()) as MtrToken;
     await token.deployed();
   });
   describe("openLine", () => {
@@ -156,23 +156,23 @@ describe("Defterhane", () => {
       )
         .to.emit(defter, "LineTransferred")
         .withArgs(hashedLine, addr2.address, addr1.address, 15);
-      // .to.emit(defter, "LineTransferred")
-      // .withArgs(addr2.address, addr3.address, 15, hashedLine);
     });
   });
   describe("closeLine", () => {
     beforeEach(async () => {
       await defter.openLine(2000000000, token.address, addr1.address, 50);
 
-      // thousand years later :)
-      await token.approve(defter.address, 50);
+      await token.setApprovalForAll(defter.address, true);
     });
     it("transfers approved amount to contract", async () => {
-      const balanceBefore = (await token.balanceOf(defter.address)).toNumber();
-
+      const balanceBefore = (
+        await token.balanceOf(defter.address, 1)
+      ).toNumber();
       await defter.closeLine(2000000000, token.address, 50);
 
-      const balanceAfter = (await token.balanceOf(defter.address)).toNumber();
+      const balanceAfter = (
+        await token.balanceOf(defter.address, 1)
+      ).toNumber();
 
       expect(balanceAfter - balanceBefore).to.equal(50);
     });
@@ -191,7 +191,7 @@ describe("Defterhane", () => {
     beforeEach(async () => {
       await defter.openLine(2000000000, token.address, addr1.address, 50);
 
-      await token.approve(defter.address, 50);
+      await token.setApprovalForAll(defter.address, true);
 
       await defter.closeLine(2000000000, token.address, 50);
     });
@@ -201,15 +201,17 @@ describe("Defterhane", () => {
         [owner.address, 2000000000, token.address]
       );
 
-      const balanceBefore = (await token.balanceOf(addr1.address)).toNumber();
+      const balanceBefore = (
+        await token.balanceOf(addr1.address, 1)
+      ).toNumber();
 
       await defter.connect(addr1).withdraw(hashedLine, token.address);
 
-      const balanceAfter = (await token.balanceOf(addr1.address)).toNumber();
+      const balanceAfter = (await token.balanceOf(addr1.address, 1)).toNumber();
 
       expect(balanceAfter - balanceBefore).to.equal(50);
     });
-    it("emit withdrawn amount", async () => {
+    it("emits withdrawn amount", async () => {
       const hashedLine = utils.solidityKeccak256(
         ["bytes", "uint256", "address"],
         [owner.address, 2000000000, token.address]

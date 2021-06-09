@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-solidity/contracts/token/ERC1155/IERC1155.sol";
+import "openzeppelin-solidity/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
-contract Defter {
+contract Defter is ERC1155Holder {
     struct Line {
         bool isOpen;
         uint256 totalAmount;
@@ -120,17 +122,28 @@ contract Defter {
     ) external {
         bytes32 _lineID = hashLine(msg.sender, _maturityDate, _unit);
         require(_totalAmount == lines[_lineID].totalAmount);
-        IERC20 token = IERC20(_unit);
-        token.transferFrom(msg.sender, address(this), _totalAmount);
+
+        IERC1155 token = IERC1155(_unit);
+        // ID and data hard coded
+        token.safeTransferFrom(
+            msg.sender,
+            address(this),
+            1,
+            _totalAmount,
+            "0x0"
+        );
+
         lines[_lineID].isOpen = false;
         emit LineClosed(_lineID, msg.sender);
     }
 
     function withdraw(bytes32 _lineID, address _unit) external {
         uint256 amount = balances[_lineID][msg.sender];
-        IERC20 token = IERC20(_unit);
         require(amount > 0, "amount can't be <= 0");
-        token.transfer(msg.sender, amount);
+
+        IERC1155 token = IERC1155(_unit);
+        token.safeTransferFrom(address(this), msg.sender, 1, amount, "0x0");
+
         balances[_lineID][msg.sender] = 0;
         emit Withdrawn(_lineID, msg.sender, amount);
     }

@@ -41,7 +41,7 @@ describe('Wallet', async () => {
 		const tokenFactory = new Token__factory(deployer);
 
 		contract = await defterFactory.deploy();
-		token = await tokenFactory.deploy(100000);
+		token = await tokenFactory.deploy();
 
 		// WALLET INSTANCE
 		wallet = await Wallet.withSigner(contract.address, walletUser);
@@ -121,14 +121,14 @@ describe('Wallet', async () => {
 	});
 	describe('closeLine', async () => {
 		it('closes line', async () => {
-			await token.connect(deployer).transfer(walletUserAddress, 100);
-			await token.connect(walletUser).approve(contract.address, 100);
+			await token.connect(deployer).safeTransferFrom(await deployer.getAddress(), walletUserAddress, 1, 100, '0x00000000000000000000');
+			await token.connect(walletUser).setApprovalForAll(contract.address, true);
 
-			const balanceBefore = (await token.balanceOf(contract.address)).toNumber();
+			const balanceBefore = (await token.balanceOf(contract.address, 1)).toNumber();
 
 			await wallet.closeLine(2000000000, token.address, 100);
 
-			const balanceAfter = (await token.balanceOf(contract.address)).toNumber();
+			const balanceAfter = (await token.balanceOf(contract.address, 1)).toNumber();
 
 			expect(balanceAfter - balanceBefore).to.equal(100);
 		});
@@ -139,8 +139,8 @@ describe('Wallet', async () => {
 
 			await contract.connect(user1).openLine(2000000000, token.address, walletUserAddress, ethers.BigNumber.from(100));
 
-			await token.connect(deployer).transfer(user1Addr, 100);
-			await token.connect(user1).approve(contract.address, 100);
+			await token.connect(deployer).safeTransferFrom(await deployer.getAddress(), user1Addr, 1, 100, '0x00000000000000000000');
+			await token.connect(user1).setApprovalForAll(contract.address, true);
 
 			await contract.connect(user1).closeLine(2000000000, token.address, 100);
 
