@@ -92,13 +92,8 @@ contract Defter {
             "number of line IDs and amounts don't match"
         );
 
-        for (uint256 i = 0; i < _lineIDs.length; i++) {
-            require(
-                balances[_lineIDs[i]][msg.sender] > 0,
-                "sender has 0 balance" // should we specify the lineID here?
-            );
+        for (uint256 i = 0; i < _lineIDs.length; i++)
             transferLineHelper(_lineIDs[i], _receiver, _amounts[i]);
-        }
     }
 
     function transferLineHelper(
@@ -106,6 +101,7 @@ contract Defter {
         address _receiver,
         uint256 _amount
     ) internal {
+        require(balances[_lineID][msg.sender] > 0, "sender has 0 balance");
         require(_receiver != address(0), "can't transfer to 0 address");
         require(_amount != 0, "can't transfer 0 amount");
         balances[_lineID][msg.sender] -= _amount;

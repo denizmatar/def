@@ -32,6 +32,7 @@
         "build": "yarn compile",
         "compile": "hardhat compile",
         "test": "yarn compile && hardhat test",
-        "clean": "hardhat clean"
+        "clean": "hardhat clean",
+        "network": "hardhat node"
     }
 }

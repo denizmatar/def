@@ -46,11 +46,8 @@ export interface LogReceived {
 }
 
 export class Wallet {
-	// tx yolladim ama cevap bekliyoruz
-	pendingHistory = new Map<string, LogPending[]>(); // array olcak logpending
-	// yeni bir open veya transfer
+	pendingHistory = new Map<string, LogPending[]>();
 	senderHistory = new Map<string, LogSent[]>();
-	// bana gelenler
 	receiverHistory = new Map<string, LogReceived[]>();
 
 	lines: { [lineID: string]: Line } = {};
@@ -66,6 +63,11 @@ export class Wallet {
 	public static async withSigner(contractAddress: string, signer: ethers.Signer): Promise<Wallet> {
 		const walletAddress = await signer.getAddress();
 		return new Wallet(contractAddress, walletAddress, signer);
+	}
+
+	public static calculateLineID(issuerAddress: string, maturityDate: number, unit: string): string {
+		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [issuerAddress, maturityDate, unit]);
+		return lineID;
 	}
 
 	private constructor(contractAddress: string, walletAddress: string, provider: ethers.Signer | ethers.providers.Provider) {
@@ -109,12 +111,10 @@ export class Wallet {
 		await this.contract.withdraw(lineID, unit);
 	}
 
-	// GETTERS
 	async getBalance(lineID: string, holder: string) {
 		return await this.contract.getBalances(lineID, holder);
 	}
 
-	// EVENT FILTERS
 	private eventFilterOpenLine(lineID: string | null = null, issuer: string | null = null) {
 		return this.contract.filters.LineOpened(lineID, issuer, null, null);
 	}
@@ -131,7 +131,6 @@ export class Wallet {
 		return this.contract.filters.Withdrawn(lineID, receiver, null);
 	}
 
-	// QUERY EVENTS
 	private async initializer() {
 		const events = await this.contract.queryFilter(this.eventFilterTransferLine());
 
@@ -144,9 +143,7 @@ export class Wallet {
 				const amount = event.args.amount;
 				const txHash = event.transactionHash;
 				const logIndex = event.logIndex;
-
 				if (sender == this.walletAddress) {
-					// Am I pushing to the right location?
 					this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash, logIndex });
 				} else if (receiver == this.walletAddress) {
 					this.pushToReceiverHistory(lineID, { date: new Date(), amount, sender, txHash, logIndex });
@@ -171,17 +168,12 @@ export class Wallet {
 		};
 	}
 
-	// LISTENERS ON
 	public listenTransferLineAsSender() {
 		const filter = this.eventFilterTransferLine(null, this.walletAddress);
 		this.contract.on(filter, (lineID: string, sender: string, receiver: string, amount: ethers.BigNumber, event: ethers.Event) => {
 			const history = this.pendingHistory.get(lineID);
-			// console.log(history);
-
 			if (history) {
 				for (let i = 0; i < history.length; i++) {
-					// console.log(history[i].txHash, event.transactionHash);
-
 					if (history[i].txHash == event.transactionHash) {
 						this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash: event.transactionHash, logIndex: event.logIndex });
 					}
@@ -218,33 +210,6 @@ export class Wallet {
 		});
 	}
 
-	// LISTENERS OFF
-	private openLineListenerOff() {
-		this.removeAllListeners('LineOpened');
-	}
-
-	private transferLineListenerOff() {
-		this.removeAllListeners('LineTransferred');
-	}
-
-	private closeLineListenerOff() {
-		this.removeAllListeners('LineClosed');
-	}
-
-	private withdrawListenerOff() {
-		this.removeAllListeners('Withdrawn');
-	}
-
-	removeAllListeners(event: any = undefined) {
-		this.contract.removeAllListeners(event);
-	}
-
-	// HELPERS
-	public static calculateLineID(issuerAddress: string, maturityDate: number, unit: string): string {
-		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [issuerAddress, maturityDate, unit]);
-		return lineID;
-	}
-
 	private pushToPendingHistory(lineID: string, data: LogPending) {
 		let currentHistory: undefined | LogPending[] = this.pendingHistory.get(lineID);
 		if (currentHistory) {
@@ -279,5 +244,25 @@ export class Wallet {
 			tempArray.push(data);
 			this.receiverHistory.set(lineID, tempArray);
 		}
+	}
+
+	private openLineListenerOff() {
+		this.removeAllListeners('LineOpened');
+	}
+
+	private transferLineListenerOff() {
+		this.removeAllListeners('LineTransferred');
+	}
+
+	private closeLineListenerOff() {
+		this.removeAllListeners('LineClosed');
+	}
+
+	private withdrawListenerOff() {
+		this.removeAllListeners('Withdrawn');
+	}
+
+	public removeAllListeners(event: any = undefined) {
+		this.contract.removeAllListeners(event);
 	}
 }
