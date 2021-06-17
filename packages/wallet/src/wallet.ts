@@ -49,8 +49,7 @@ export class Wallet {
 	pendingHistory = new Map<string, LogPending[]>();
 	senderHistory = new Map<string, LogSent[]>();
 	receiverHistory = new Map<string, LogReceived[]>();
-
-	lines: { [lineID: string]: Line } = {};
+	lines = new Map<string, Line[]>();
 
 	contract: Defter;
 	walletAddress: string;
@@ -79,7 +78,7 @@ export class Wallet {
 	// MAIN FUNCTIONS
 	async openLine(maturityDate: number, unit: string, receiver: string, amount: ethers.BigNumber): Promise<{ lineID: string; txHash: string }> {
 		const lineID = Wallet.calculateLineID(this.walletAddress, maturityDate, unit);
-		if (!this.lines[lineID]) {
+		if (!this.lines.get(lineID)) {
 			const line: Line = {
 				lineID,
 				issuer: this.walletAddress,
@@ -87,7 +86,7 @@ export class Wallet {
 				unit,
 				status: LineStatus.OPEN,
 			};
-			this.lines[lineID] = line;
+			this.pushToLines(lineID, line);
 		}
 		const tx = await this.contract.openLine(maturityDate, unit, receiver, amount);
 		this.pushToPendingHistory(lineID, { amount, receiver, txHash: tx.hash, txType: TxType.ISSUE, validated: false });
@@ -132,22 +131,36 @@ export class Wallet {
 	}
 
 	private async initializer() {
-		const events = await this.contract.queryFilter(this.eventFilterTransferLine());
+		const transferEvents = await this.contract.queryFilter(this.eventFilterTransferLine());
+		const openEvents = await this.contract.queryFilter(this.eventFilterOpenLine());
 
-		if (events.length != 0) {
-			for (let i = 0; i < events.length; i++) {
-				const event = events[i];
+		if (transferEvents.length != 0) {
+			for (let i = 0; i < transferEvents.length; i++) {
+				const event = transferEvents[i];
 				const lineID = event.args.lineID;
 				const sender = event.args.sender;
 				const receiver = event.args.receiver;
 				const amount = event.args.amount;
 				const txHash = event.transactionHash;
 				const logIndex = event.logIndex;
+
 				if (sender == this.walletAddress) {
 					this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash, logIndex });
 				} else if (receiver == this.walletAddress) {
 					this.pushToReceiverHistory(lineID, { date: new Date(), amount, sender, txHash, logIndex });
 				}
+			}
+		}
+		if (openEvents.length != 0) {
+			for (let i = 0; i < openEvents.length; i++) {
+				const event = openEvents[i];
+				const lineID = event.args.lineID;
+				const issuer = event.args.issuer;
+				const unit = event.args.unit;
+				const maturityDate = event.args.maturityDate.toNumber();
+
+				// LineStatus neye gore open/closed???
+				this.pushToLines(lineID, { lineID, issuer, maturityDate, unit, status: LineStatus.OPEN });
 			}
 		}
 	}
@@ -243,6 +256,18 @@ export class Wallet {
 			let tempArray: LogReceived[] = [];
 			tempArray.push(data);
 			this.receiverHistory.set(lineID, tempArray);
+		}
+	}
+
+	private pushToLines(lineID: string, data: Line) {
+		let currentHistory: undefined | Line[] = this.lines.get(lineID);
+		if (currentHistory) {
+			currentHistory.push(data);
+			this.lines.set(lineID, currentHistory);
+		} else {
+			let tempArray: Line[] = [];
+			tempArray.push(data);
+			this.lines.set(lineID, tempArray);
 		}
 	}
 
