@@ -160,6 +160,7 @@ export class Wallet {
 				const maturityDate = event.args.maturityDate.toNumber();
 
 				// LineStatus neye gore open/closed???
+				// closedLine lara bakip matchlenebilir?
 				this.pushToLines(lineID, { lineID, issuer, maturityDate, unit, status: LineStatus.OPEN });
 			}
 		}

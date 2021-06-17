@@ -115,7 +115,11 @@ contract Defter {
         uint256 _totalAmount
     ) external {
         bytes32 _lineID = hashLine(msg.sender, _maturityDate, _unit);
-        require(_totalAmount == lines[_lineID].totalAmount);
+        // require(lines[_lineID] != 0, "line not found");
+        require(
+            _totalAmount == lines[_lineID].totalAmount,
+            "amount doesn't match"
+        );
         IERC20 token = IERC20(_unit);
         token.transferFrom(msg.sender, address(this), _totalAmount);
         lines[_lineID].isOpen = false;

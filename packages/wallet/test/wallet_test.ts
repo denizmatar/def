@@ -134,7 +134,8 @@ describe('Wallet', async () => {
 
 		let maturity = 2000000000;
 		let lineID = Wallet.calculateLineID(walletUserAddr, maturity, token.address);
-		await wallet.openLine(2000000000, token.address, user1Addr, ethers.BigNumber.from(100));
+
+		await wallet.openLine(maturity, token.address, user1Addr, ethers.BigNumber.from(100));
 		const balance = (await wallet.getBalance(lineID, user1Addr)).toNumber();
 		expect(balance).to.equal(100);
 	});
@@ -159,24 +160,23 @@ describe('Wallet', async () => {
 	it('transfers line', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
 
-		let lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [user1Addr, 2000000000, token.address]);
+		const lineID = Wallet.calculateLineID(user1Addr, 2000000000, token.address);
 
 		await defter.connect(user1).openLine(2000000000, token.address, walletUserAddr, ethers.BigNumber.from(100));
 		await wallet.transferLine([lineID], [ethers.BigNumber.from(100)], user2Addr);
-		// await wallet.transferLine([lineID], [ethers.BigNumber.from(100)], user2Addr);
 
 		const balance = (await wallet.getBalance(lineID, user2Addr)).toNumber();
 
 		expect(balance).to.equal(100);
 	});
-	xit('listens transferLine', async () => {
+	it('listens transferLine', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
 		wallet.listenTransferLineAsSender();
 
 		const histBefore = wallet.senderHistory;
 		const histBeforeSize = histBefore.size;
 
-		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [user1Addr, 2000000000, token.address]);
+		const lineID = Wallet.calculateLineID(user1Addr, 2000000000, token.address);
 
 		await defter.connect(user1).openLine(2000000000, token.address, walletUserAddr, ethers.BigNumber.from(100));
 		await wallet.transferLine([lineID], [ethers.BigNumber.from(100)], user2Addr);
@@ -185,11 +185,14 @@ describe('Wallet', async () => {
 
 		const histAfter = wallet.senderHistory;
 
-		expect(histAfter.size - histBeforeSize).to.equal(2);
+		expect(histAfter.size - histBeforeSize).to.equal(1);
 	}).timeout(10000);
 
-	it.skip('closes line', async () => {
+	it('closes line', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
+
+		await wallet.openLine(2000000000, token.address, user1Addr, ethers.BigNumber.from(100));
+
 		await token.connect(deployer).transfer(walletUserAddr, 100);
 		await token.connect(walletUser).approve(defter.address, 100);
 
@@ -202,7 +205,7 @@ describe('Wallet', async () => {
 		expect(balanceAfter - balanceBefore).to.equal(100);
 	});
 
-	it.skip('withdraws', async () => {
+	it('withdraws', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
 		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [user1Addr, 2000000000, token.address]);
 
