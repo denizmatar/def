@@ -47,7 +47,7 @@ export interface LogReceived {
 
 export class Wallet {
 	// tx yolladim ama cevap bekliyoruz
-	pendingHistory = new Map<string, LogPending[]>(); // array olcak logpending
+	pendingHistory = new Map<string, LogPending[]>();
 	// yeni bir open veya transfer
 	senderHistory = new Map<string, LogSent[]>();
 	// bana gelenler

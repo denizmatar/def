@@ -1,29 +1,30 @@
 {
-    "name": "@def/wallet",
-    "version": "0.1.0",
-    "license": "UNLICENSED",
-    "dependencies": {
-        "ethers": "^5.1.4"
-    },
-    "devDependencies": {
-        "@typechain/ethers-v5": "^7.0.0",
-        "@types/chai": "^4.2.18",
-        "@types/mocha": "^8.2.2",
-        "@types/node": "^15.0.2",
-        "chai": "^4.3.4",
-        "mocha": "^7.2.0",
-        "ts-node": "^10.0.0",
-        "typechain": "^5.0.0",
-        "typescript": "^4.3.2"
-    },
-    "scripts": {
-        "wrappers:generate": "yarn wrappers:clean && yarn wrappers:typechain",
-        "wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../contracts/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'",
-        "wrappers:clean": "rm -rf src/contracts",
-        "ts:clean": "rm -rf lib",
-        "ts:build": "yarn ts:clean && tsc -b",
-        "build": "yarn wrappers:generate && yarn ts:build",
-        "clean": "yarn wrappers:clean && yarn ts:clean",
-        "test": "yarn build && mocha -r ts-node/register lib/test/*.js --exit"
-    }
+  "name": "@def/wallet",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "ethers": "^5.1.4"
+  },
+  "devDependencies": {
+    "@typechain/ethers-v5": "^7.0.0",
+    "@types/chai": "^4.2.18",
+    "@types/mocha": "^8.2.2",
+    "@types/node": "^15.0.2",
+    "chai": "^4.3.4",
+    "mocha": "^7.2.0",
+    "ts-node": "^10.0.0",
+    "typechain": "^5.0.0",
+    "typescript": "^4.3.2"
+  },
+  "scripts": {
+    "wrappers:generate": "yarn wrappers:clean && yarn wrappers:typechain",
+    "wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../contracts/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'",
+    "wrappers:clean": "rm -rf src/contracts",
+    "wrappers:generate-contracts": "cd ../contracts && yarn compile",
+    "ts:clean": "rm -rf lib",
+    "ts:build": "yarn ts:clean && tsc -b",
+    "build": "yarn wrappers:generate-contracts && yarn wrappers:generate && yarn ts:build",
+    "clean": "yarn wrappers:clean && yarn ts:clean",
+    "test": "yarn build && mocha -r ts-node/register lib/test/*.js --exit"
+  }
 }

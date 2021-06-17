@@ -2,11 +2,13 @@ import { ethers } from "hardhat";
 import { expect } from "chai";
 import { Defter } from "../typechain/Defter";
 import { MtrToken } from "../typechain/MtrToken";
+import { Erc1155Defter } from "../typechain/Erc1155Defter";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { utils } from "ethers";
 
 let defter: Defter;
 let token: MtrToken;
+let defter1155: Erc1155Defter;
 let owner: SignerWithAddress;
 let addr1: SignerWithAddress;
 let addr2: SignerWithAddress;
@@ -24,6 +26,27 @@ describe("Defterhane", () => {
     const tokenFactory = await ethers.getContractFactory("MTRToken", owner);
     token = (await tokenFactory.deploy()) as MtrToken;
     await token.deployed();
+
+    const ERC1155DefterFactory = await ethers.getContractFactory(
+      "ERC1155Defter",
+      owner
+    );
+    defter1155 = (await ERC1155DefterFactory.deploy("")) as Erc1155Defter;
+    await defter1155.deployed();
+  });
+  describe("test", async () => {
+    it("ERC1155Defter.sol recover signer", async () => {
+      const test = ethers.utils.solidityKeccak256(["string"], ["Deniz"]);
+      const testBytes = ethers.utils.arrayify(test);
+      const messageHash = ethers.utils.hashMessage(testBytes);
+
+      const signature = await owner.signMessage(testBytes);
+
+      console.log("====================");
+
+      console.log(await defter1155.recoverSigner(messageHash, signature));
+      console.log(owner.address);
+    });
   });
   describe("openLine", () => {
     it("gets line balance", async () => {

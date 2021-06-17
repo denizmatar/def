@@ -1,12 +1,12 @@
 {
-    "extends": "../../tsconfig-base.json",
-    "compilerOptions": {
-        "target": "es6",
-        "resolveJsonModule": true,
-        "esModuleInterop": true,
-        "rootDir": ".",
-        "outDir": "lib/"
-    },
-    "include": ["src/**/*", "test/**/*", "lib/**/*"],
-    "exclude": ["node_modules"]
+  "extends": "../../tsconfig-base.json",
+  "compilerOptions": {
+    "target": "es6",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "rootDir": ".",
+    "outDir": "lib/"
+  },
+  "include": ["src/**/*", "test/**/*", "lib/**/*"],
+  "exclude": ["node_modules"]
 }
