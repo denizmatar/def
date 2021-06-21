@@ -1,7 +1,7 @@
 import { hashMessage } from '@ethersproject/hash';
 import { BigNumber, ethers } from 'ethers';
-import { Defter } from '../src/contracts/Defter';
-import { Defter__factory } from '../src/contracts/factories/Defter__factory';
+import { ERC1155Defter } from '../src/contracts/ERC1155Defter';
+import { ERC1155Defter__factory } from '../src/contracts/factories/ERC1155Defter__factory';
 
 export enum LineStatus {
 	OPEN,
@@ -46,16 +46,12 @@ export interface LogReceived {
 }
 
 export class Wallet {
-	// tx yolladim ama cevap bekliyoruz
 	pendingHistory = new Map<string, LogPending[]>();
-	// yeni bir open veya transfer
 	senderHistory = new Map<string, LogSent[]>();
-	// bana gelenler
 	receiverHistory = new Map<string, LogReceived[]>();
+	lines = new Map<string, Line[]>();
 
-	lines: { [lineID: string]: Line } = {};
-
-	contract: Defter;
+	contract: ERC1155Defter;
 	walletAddress: string;
 
 	// NEW INSTANCE
@@ -68,16 +64,21 @@ export class Wallet {
 		return new Wallet(contractAddress, walletAddress, signer);
 	}
 
+	public static calculateLineID(issuerAddress: string, maturityDate: number, unit: string): string {
+		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [issuerAddress, maturityDate, unit]);
+		return lineID;
+	}
+
 	private constructor(contractAddress: string, walletAddress: string, provider: ethers.Signer | ethers.providers.Provider) {
-		this.contract = Defter__factory.connect(contractAddress, provider);
+		this.contract = ERC1155Defter__factory.connect(contractAddress, provider);
 		this.walletAddress = walletAddress;
 		this.initializer();
 	}
 
 	// MAIN FUNCTIONS
-	async openLine(maturityDate: number, unit: string, receiver: string, amount: ethers.BigNumber): Promise<{ lineID: string; txHash: string }> {
+	async openLine(issuer: string, receiver: string, unit: string, amount: ethers.BigNumber, maturityDate: number, signature: string): Promise<{ lineID: string; txHash: string }> {
 		const lineID = Wallet.calculateLineID(this.walletAddress, maturityDate, unit);
-		if (!this.lines[lineID]) {
+		if (!this.lines.get(lineID)) {
 			const line: Line = {
 				lineID,
 				issuer: this.walletAddress,
@@ -85,36 +86,34 @@ export class Wallet {
 				unit,
 				status: LineStatus.OPEN,
 			};
-			this.lines[lineID] = line;
+			this.pushToLines(lineID, line);
 		}
-		const tx = await this.contract.openLine(maturityDate, unit, receiver, amount);
+		const tx = await this.contract.openLine(issuer, receiver, unit, amount, maturityDate, signature);
 		this.pushToPendingHistory(lineID, { amount, receiver, txHash: tx.hash, txType: TxType.ISSUE, validated: false });
 		return { lineID, txHash: tx.hash };
 	}
 
-	async transferLine(lineIDs: string[], amounts: ethers.BigNumber[], receiver: string) {
-		const tx = await this.contract.transferLine(lineIDs, amounts, receiver);
+	async transferLine(from: string, to: string, lineIDs: string[], amounts: ethers.BigNumber[], signature: string) {
+		const tx = await this.contract.safeBatchTransferFrom(from, to, lineIDs, amounts, signature);
 		const size = lineIDs.length;
 		for (let i = 0; i < size; i++) {
-			const log = { date: new Date(), amount: amounts[i], receiver };
-			this.pushToPendingHistory(lineIDs[i], { amount: amounts[i], receiver, txHash: tx.hash, txType: TxType.TRANSFER, validated: false });
+			const log = { date: new Date(), amount: amounts[i], to };
+			this.pushToPendingHistory(lineIDs[i], { amount: amounts[i], receiver: to, txHash: tx.hash, txType: TxType.TRANSFER, validated: false });
 		}
 	}
 
-	async closeLine(maturityDate: number, unit: string, totalAmount: number) {
-		await this.contract.closeLine(maturityDate, unit, totalAmount);
+	async closeLine(from: string, unit: string, totalAmount: number, maturityDate: number, signature: string) {
+		await this.contract.closeLine(from, unit, totalAmount, maturityDate, signature);
 	}
 
-	async withdraw(lineID: string, unit: string) {
-		await this.contract.withdraw(lineID, unit);
+	async withdraw(from: string, lineID: string, unit: string, signature: string) {
+		await this.contract.withdraw(from, lineID, unit, signature);
 	}
 
-	// GETTERS
 	async getBalance(lineID: string, holder: string) {
 		return await this.contract.getBalances(lineID, holder);
 	}
 
-	// EVENT FILTERS
 	private eventFilterOpenLine(lineID: string | null = null, issuer: string | null = null) {
 		return this.contract.filters.LineOpened(lineID, issuer, null, null);
 	}
@@ -131,13 +130,13 @@ export class Wallet {
 		return this.contract.filters.Withdrawn(lineID, receiver, null);
 	}
 
-	// QUERY EVENTS
 	private async initializer() {
-		const events = await this.contract.queryFilter(this.eventFilterTransferLine());
+		const transferEvents = await this.contract.queryFilter(this.eventFilterTransferLine());
+		const openEvents = await this.contract.queryFilter(this.eventFilterOpenLine());
 
-		if (events.length != 0) {
-			for (let i = 0; i < events.length; i++) {
-				const event = events[i];
+		if (transferEvents.length != 0) {
+			for (let i = 0; i < transferEvents.length; i++) {
+				const event = transferEvents[i];
 				const lineID = event.args.lineID;
 				const sender = event.args.sender;
 				const receiver = event.args.receiver;
@@ -146,11 +145,23 @@ export class Wallet {
 				const logIndex = event.logIndex;
 
 				if (sender == this.walletAddress) {
-					// Am I pushing to the right location?
 					this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash, logIndex });
 				} else if (receiver == this.walletAddress) {
 					this.pushToReceiverHistory(lineID, { date: new Date(), amount, sender, txHash, logIndex });
 				}
+			}
+		}
+		if (openEvents.length != 0) {
+			for (let i = 0; i < openEvents.length; i++) {
+				const event = openEvents[i];
+				const lineID = event.args.lineID;
+				const issuer = event.args.issuer;
+				const unit = event.args.unit;
+				const maturityDate = event.args.maturityDate.toNumber();
+
+				// LineStatus neye gore open/closed???
+				// closedLine lara bakip matchlenebilir?
+				this.pushToLines(lineID, { lineID, issuer, maturityDate, unit, status: LineStatus.OPEN });
 			}
 		}
 	}
@@ -171,17 +182,12 @@ export class Wallet {
 		};
 	}
 
-	// LISTENERS ON
 	public listenTransferLineAsSender() {
 		const filter = this.eventFilterTransferLine(null, this.walletAddress);
 		this.contract.on(filter, (lineID: string, sender: string, receiver: string, amount: ethers.BigNumber, event: ethers.Event) => {
 			const history = this.pendingHistory.get(lineID);
-			// console.log(history);
-
 			if (history) {
 				for (let i = 0; i < history.length; i++) {
-					// console.log(history[i].txHash, event.transactionHash);
-
 					if (history[i].txHash == event.transactionHash) {
 						this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash: event.transactionHash, logIndex: event.logIndex });
 					}
@@ -218,33 +224,6 @@ export class Wallet {
 		});
 	}
 
-	// LISTENERS OFF
-	private openLineListenerOff() {
-		this.removeAllListeners('LineOpened');
-	}
-
-	private transferLineListenerOff() {
-		this.removeAllListeners('LineTransferred');
-	}
-
-	private closeLineListenerOff() {
-		this.removeAllListeners('LineClosed');
-	}
-
-	private withdrawListenerOff() {
-		this.removeAllListeners('Withdrawn');
-	}
-
-	removeAllListeners(event: any = undefined) {
-		this.contract.removeAllListeners(event);
-	}
-
-	// HELPERS
-	public static calculateLineID(issuerAddress: string, maturityDate: number, unit: string): string {
-		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [issuerAddress, maturityDate, unit]);
-		return lineID;
-	}
-
 	private pushToPendingHistory(lineID: string, data: LogPending) {
 		let currentHistory: undefined | LogPending[] = this.pendingHistory.get(lineID);
 		if (currentHistory) {
@@ -279,5 +258,37 @@ export class Wallet {
 			tempArray.push(data);
 			this.receiverHistory.set(lineID, tempArray);
 		}
+	}
+
+	private pushToLines(lineID: string, data: Line) {
+		let currentHistory: undefined | Line[] = this.lines.get(lineID);
+		if (currentHistory) {
+			currentHistory.push(data);
+			this.lines.set(lineID, currentHistory);
+		} else {
+			let tempArray: Line[] = [];
+			tempArray.push(data);
+			this.lines.set(lineID, tempArray);
+		}
+	}
+
+	private openLineListenerOff() {
+		this.removeAllListeners('LineOpened');
+	}
+
+	private transferLineListenerOff() {
+		this.removeAllListeners('LineTransferred');
+	}
+
+	private closeLineListenerOff() {
+		this.removeAllListeners('LineClosed');
+	}
+
+	private withdrawListenerOff() {
+		this.removeAllListeners('Withdrawn');
+	}
+
+	public removeAllListeners(event: any = undefined) {
+		this.contract.removeAllListeners(event);
 	}
 }

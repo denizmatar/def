@@ -18,7 +18,7 @@
   },
   "scripts": {
     "wrappers:generate": "yarn wrappers:clean && yarn wrappers:typechain",
-    "wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../contracts/artifacts/contracts/**/?(Defter|IERC20|MTRToken).json'",
+    "wrappers:typechain": "typechain --target ethers-v5 --out-dir src/contracts '../contracts/artifacts/contracts/**/?(ERC1155Defter|IERC20|MTRToken).json'",
     "wrappers:clean": "rm -rf src/contracts",
     "ts:clean": "rm -rf lib",
     "ts:build": "yarn ts:clean && tsc -b",
