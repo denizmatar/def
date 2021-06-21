@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.0;
 
 import "openzeppelin-solidity/contracts/token/ERC1155/IERC1155.sol";
@@ -8,6 +7,7 @@ import "openzeppelin-solidity/contracts/token/ERC1155/extensions/IERC1155Metadat
 import "openzeppelin-solidity/contracts/utils/Address.sol";
 import "openzeppelin-solidity/contracts/utils/Context.sol";
 import "openzeppelin-solidity/contracts/utils/introspection/ERC165.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 
 import "hardhat/console.sol";
 
@@ -20,19 +20,15 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
     // Mapping from account to operator approvals
     mapping(address => mapping(address => bool)) private _operatorApprovals;
 
-    // Used as the URI for all token types by relying on ID substitution, e.g. https://token-cdn-domain/{id}.json
+    // Mapping from account to nonce
+    mapping(address => uint256) public _nonces;
+
     string private _uri;
 
-    /**
-     * @dev See {_setURI}.
-     */
     constructor(string memory uri_) {
         _setURI(uri_);
     }
 
-    /**
-     * @dev See {IERC165-supportsInterface}.
-     */
     function supportsInterface(bytes4 interfaceId)
         public
         view
@@ -46,27 +42,10 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
             super.supportsInterface(interfaceId);
     }
 
-    /**
-     * @dev See {IERC1155MetadataURI-uri}.
-     *
-     * This implementation returns the same URI for *all* token types. It relies
-     * on the token type ID substitution mechanism
-     * https://eips.ethereum.org/EIPS/eip-1155#metadata[defined in the EIP].
-     *
-     * Clients calling this function must replace the `\{id\}` substring with the
-     * actual token type ID.
-     */
     function uri(uint256) public view virtual override returns (string memory) {
         return _uri;
     }
 
-    /**
-     * @dev See {IERC1155-balanceOf}.
-     *
-     * Requirements:
-     *
-     * - `account` cannot be the zero address.
-     */
     function balanceOf(address account, uint256 id)
         public
         view
@@ -81,13 +60,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         return _balances[id][account];
     }
 
-    /**
-     * @dev See {IERC1155-balanceOfBatch}.
-     *
-     * Requirements:
-     *
-     * - `accounts` and `ids` must have the same length.
-     */
     function balanceOfBatch(address[] memory accounts, uint256[] memory ids)
         public
         view
@@ -109,9 +81,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         return batchBalances;
     }
 
-    /**
-     * @dev See {IERC1155-setApprovalForAll}.
-     */
     function setApprovalForAll(address operator, bool approved)
         public
         virtual
@@ -126,9 +95,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         emit ApprovalForAll(_msgSender(), operator, approved);
     }
 
-    /**
-     * @dev See {IERC1155-isApprovedForAll}.
-     */
     function isApprovedForAll(address account, address operator)
         public
         view
@@ -139,9 +105,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         return _operatorApprovals[account][operator];
     }
 
-    /**
-     * @dev See {IERC1155-safeTransferFrom}.
-     */
     function safeTransferFrom(
         address from,
         address to,
@@ -179,9 +142,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         _doSafeTransferAcceptanceCheck(operator, from, to, id, amount, data);
     }
 
-    /**
-     * @dev See {IERC1155-safeBatchTransferFrom}.
-     */
     function safeBatchTransferFrom(
         address from,
         address to,
@@ -195,7 +155,9 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         );
         require(to != address(0), "ERC1155: transfer to the zero address");
         require(
-            from == _msgSender() || isApprovedForAll(from, _msgSender()),
+            from == _msgSender() ||
+                isApprovedForAll(from, _msgSender()) ||
+                verifyForTransfer(from, to, ids, amounts, _nonces[from], data),
             "ERC1155: transfer caller is not owner nor approved"
         );
 
@@ -214,7 +176,10 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
             );
             _balances[id][from] = fromBalance - amount;
             _balances[id][to] += amount;
+            emit LineTransferred(bytes32(id), from, to, amount);
         }
+
+        _nonces[from] += 1;
 
         emit TransferBatch(operator, from, to, ids, amounts);
 
@@ -228,40 +193,10 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         );
     }
 
-    /**
-     * @dev Sets a new URI for all token types, by relying on the token type ID
-     * substitution mechanism
-     * https://eips.ethereum.org/EIPS/eip-1155#metadata[defined in the EIP].
-     *
-     * By this mechanism, any occurrence of the `\{id\}` substring in either the
-     * URI or any of the amounts in the JSON file at said URI will be replaced by
-     * clients with the token type ID.
-     *
-     * For example, the `https://token-cdn-domain/\{id\}.json` URI would be
-     * interpreted by clients as
-     * `https://token-cdn-domain/000000000000000000000000000000000000000000000000000000000004cce0.json`
-     * for token type ID 0x4cce0.
-     *
-     * See {uri}.
-     *
-     * Because these URIs cannot be meaningfully represented by the {URI} event,
-     * this function emits no events.
-     */
     function _setURI(string memory newuri) internal virtual {
         _uri = newuri;
     }
 
-    /**
-     * @dev Creates `amount` tokens of token type `id`, and assigns them to `account`.
-     *
-     * Emits a {TransferSingle} event.
-     *
-     * Requirements:
-     *
-     * - `account` cannot be the zero address.
-     * - If `account` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155Received} and return the
-     * acceptance magic value.
-     */
     function _mint(
         address account,
         uint256 id,
@@ -294,15 +229,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         );
     }
 
-    /**
-     * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_mint}.
-     *
-     * Requirements:
-     *
-     * - `ids` and `amounts` must have the same length.
-     * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155BatchReceived} and return the
-     * acceptance magic value.
-     */
     function _mintBatch(
         address to,
         uint256[] memory ids,
@@ -335,14 +261,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         );
     }
 
-    /**
-     * @dev Destroys `amount` tokens of token type `id` from `account`
-     *
-     * Requirements:
-     *
-     * - `account` cannot be the zero address.
-     * - `account` must have at least `amount` tokens of token type `id`.
-     */
     function _burn(
         address account,
         uint256 id,
@@ -371,13 +289,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         emit TransferSingle(operator, account, address(0), id, amount);
     }
 
-    /**
-     * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_burn}.
-     *
-     * Requirements:
-     *
-     * - `ids` and `amounts` must have the same length.
-     */
     function _burnBatch(
         address account,
         uint256[] memory ids,
@@ -408,26 +319,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         emit TransferBatch(operator, account, address(0), ids, amounts);
     }
 
-    /**
-     * @dev Hook that is called before any token transfer. This includes minting
-     * and burning, as well as batched variants.
-     *
-     * The same hook is called on both single and batched variants. For single
-     * transfers, the length of the `id` and `amount` arrays will be 1.
-     *
-     * Calling conditions (for each `id` and `amount` pair):
-     *
-     * - When `from` and `to` are both non-zero, `amount` of ``from``'s tokens
-     * of token type `id` will be  transferred to `to`.
-     * - When `from` is zero, `amount` tokens of token type `id` will be minted
-     * for `to`.
-     * - when `to` is zero, `amount` of ``from``'s tokens of token type `id`
-     * will be burned.
-     * - `from` and `to` are never both zero.
-     * - `ids` and `amounts` have the same, non-zero length.
-     *
-     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
-     */
     function _beforeTokenTransfer(
         address operator,
         address from,
@@ -511,13 +402,205 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         return array;
     }
 
-    function getMessageHash(
-        address _to,
+    /*
+    ========================================================================
+    ||                               DEFTER                               ||
+    ========================================================================
+    */
+
+    struct Line {
+        bool isOpen;
+        uint256 totalAmount;
+    }
+
+    mapping(bytes32 => Line) lines;
+
+    event LineOpened(
+        bytes32 indexed lineID,
+        address indexed issuer,
+        address unit,
+        uint256 maturityDate
+    );
+
+    event LineTransferred(
+        bytes32 indexed lineID,
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount
+    );
+
+    event LineClosed(bytes32 indexed lineID, address indexed issuer);
+
+    event Withdrawn(
+        bytes32 indexed lineID,
+        address indexed receiver,
+        uint256 amount
+    );
+
+    function hashLine(
+        address _from,
+        uint256 _maturityDate,
+        address _unit
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_from, _maturityDate, _unit));
+    }
+
+    function getBalances(bytes32 _lineID, address _holder)
+        external
+        view
+        returns (uint256)
+    {
+        return _balances[uint256(_lineID)][_holder];
+    }
+
+    function openLine(
+        address _issuer,
+        address _receiver,
+        address _unit,
         uint256 _amount,
-        string memory _message,
+        uint256 _maturityDate,
+        bytes memory _signature
+    ) external {
+        require(
+            _maturityDate > (block.timestamp + 1 days),
+            "can't open line for such a date this close"
+        );
+
+        require(
+            _issuer == msg.sender ||
+                verifyForOpen(
+                    _issuer,
+                    _maturityDate,
+                    _unit,
+                    _nonces[_issuer],
+                    _signature
+                ),
+            "msg.sender is not issuer nor has a valid signature"
+        );
+        bytes32 lineID = hashLine(_issuer, _maturityDate, _unit);
+
+        _nonces[_issuer] += 1;
+
+        lines[lineID].isOpen = true;
+        openLineHelper(_issuer, lineID, _receiver, _amount);
+
+        emit LineOpened(lineID, _issuer, _unit, _maturityDate);
+    }
+
+    function openLineHelper(
+        address _issuer,
+        bytes32 _lineID,
+        address _receiver,
+        uint256 _amount
+    ) internal {
+        require(_receiver != address(0), "can't open line for 0 address");
+        require(_amount != 0, "can't open line for 0 amount");
+
+        _mint(_receiver, uint256(_lineID), _amount, "");
+
+        lines[_lineID].totalAmount += _amount;
+        emit LineTransferred(_lineID, _issuer, _receiver, _amount);
+    }
+
+    function closeLine(
+        address _from,
+        address _unit,
+        uint256 _totalAmount,
+        uint256 _maturityDate,
+        bytes memory _signature
+    ) external {
+        require(
+            _from == msg.sender ||
+                verifyForClose(
+                    _from,
+                    _unit,
+                    _totalAmount,
+                    _maturityDate,
+                    _nonces[_from],
+                    _signature
+                ),
+            "msg.sender is not line owner nor has a valid signature"
+        );
+        bytes32 _lineID = hashLine(_from, _maturityDate, _unit);
+        require(
+            _totalAmount == lines[_lineID].totalAmount,
+            "total amounts don't match"
+        );
+
+        IERC20 token = IERC20(_unit);
+        token.transferFrom(_from, address(this), _totalAmount);
+
+        lines[_lineID].isOpen = false;
+        emit LineClosed(_lineID, _from);
+    }
+
+    function withdraw(
+        address _from,
+        bytes32 _lineID,
+        address _unit,
+        bytes memory _signature
+    ) external {
+        require(
+            msg.sender == _from ||
+                verifyForWithdraw(
+                    _from,
+                    _lineID,
+                    _unit,
+                    _nonces[_from],
+                    _signature
+                ),
+            "msg.sender is not receiver nor has a valid signature"
+        );
+        uint256 amount = _balances[uint256(_lineID)][_from];
+        require(amount > 0, "amount can't be <= 0");
+
+        IERC20 token = IERC20(_unit);
+        token.transfer(_from, amount);
+
+        _balances[uint256(_lineID)][_from] = 0;
+        emit Withdrawn(_lineID, _from, amount);
+    }
+
+    function getMessageHashForOpen(
+        address _issuer,
+        uint256 _maturityDate,
+        address _unit,
         uint256 _nonce
     ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(_to, _amount, _message, _nonce));
+        return
+            keccak256(abi.encodePacked(_issuer, _maturityDate, _unit, _nonce));
+    }
+
+    function getMessageHashForTransfer(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        uint256 _nonce
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(from, to, ids, amounts, _nonce));
+    }
+
+    function getMessageHashForClose(
+        address from,
+        address unit,
+        uint256 totalAmount,
+        uint256 maturityDate,
+        uint256 _nonce
+    ) public pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(from, unit, totalAmount, maturityDate, _nonce)
+            );
+    }
+
+    function getMessageHashForWithdraw(
+        address from,
+        bytes32 lineID,
+        address unit,
+        uint256 _nonce
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(from, lineID, unit, _nonce));
     }
 
     function getEthSignedMessageHash(bytes32 _messageHash)
@@ -525,10 +608,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         pure
         returns (bytes32)
     {
-        /*
-        Signature is produced by signing a keccak256 hash with the following format:
-        "\x19Ethereum Signed Message\n" + len(msg) + msg
-        */
         return
             keccak256(
                 abi.encodePacked(
@@ -538,20 +617,68 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
             );
     }
 
-    function verify(
-        address _signer,
-        address _to,
-        uint256 _amount,
-        string memory _message,
+    function verifyForOpen(
+        address _issuer,
+        uint256 _maturityDate,
+        address _unit,
         uint256 _nonce,
         bytes memory signature
     ) public pure returns (bool) {
-        bytes32 messageHash = getMessageHash(_to, _amount, _message, _nonce);
-        // bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+        bytes32 messageHash =
+            getMessageHashForOpen(_issuer, _maturityDate, _unit, _nonce);
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
 
-        // console.log("DENIZ");
-        return recoverSigner(messageHash, signature) == _signer;
-        // messageHash yerine ethSignedMessageHash idi normalde
+        return recoverSigner(ethSignedMessageHash, signature) == _issuer;
+    }
+
+    function verifyForTransfer(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        uint256 _nonce,
+        bytes memory signature
+    ) public pure returns (bool) {
+        bytes32 messageHash =
+            getMessageHashForTransfer(from, to, ids, amounts, _nonce);
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        return recoverSigner(ethSignedMessageHash, signature) == from;
+    }
+
+    function verifyForClose(
+        address _from,
+        address _unit,
+        uint256 _totalAmount,
+        uint256 _maturityDate,
+        uint256 _nonce,
+        bytes memory signature
+    ) public pure returns (bool) {
+        bytes32 messageHash =
+            getMessageHashForClose(
+                _from,
+                _unit,
+                _totalAmount,
+                _maturityDate,
+                _nonce
+            );
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        return recoverSigner(ethSignedMessageHash, signature) == _from;
+    }
+
+    function verifyForWithdraw(
+        address _from,
+        bytes32 _lineID,
+        address _unit,
+        uint256 _nonce,
+        bytes memory signature
+    ) public pure returns (bool) {
+        bytes32 messageHash =
+            getMessageHashForWithdraw(_from, _lineID, _unit, _nonce);
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        return recoverSigner(ethSignedMessageHash, signature) == _from;
     }
 
     function recoverSigner(
