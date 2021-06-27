@@ -35,7 +35,7 @@ describe("Defterhane", () => {
         [owner.address, 2000000000, token.address]
       );
 
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr1.address,
         token.address,
@@ -51,7 +51,7 @@ describe("Defterhane", () => {
 
     it("zero receiver not allowed", async () => {
       await expect(
-        defter1155.openLine(
+        defter1155.mint(
           owner.address,
           addr0,
           token.address,
@@ -63,7 +63,7 @@ describe("Defterhane", () => {
     });
     it("zero amount not allowed", async () => {
       await expect(
-        defter1155.openLine(
+        defter1155.mint(
           owner.address,
           addr1.address,
           token.address,
@@ -79,7 +79,7 @@ describe("Defterhane", () => {
         [owner.address, 2000000000, token.address]
       );
 
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr1.address,
         token.address,
@@ -87,7 +87,7 @@ describe("Defterhane", () => {
         2000000000,
         "0x00"
       );
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr2.address,
         token.address,
@@ -107,7 +107,7 @@ describe("Defterhane", () => {
       );
 
       await expect(
-        await defter1155.openLine(
+        await defter1155.mint(
           owner.address,
           addr1.address,
           token.address,
@@ -116,8 +116,8 @@ describe("Defterhane", () => {
           "0x00"
         )
       )
-        .to.emit(defter1155, "LineOpened")
-        .withArgs(hashedLine, owner.address, token.address, 2000000000);
+        .to.emit(defter1155, "TransferSingle")
+        .withArgs(owner.address, owner.address, addr1.address, hashedLine, 20);
     });
     it("verifies signature and opens line", async () => {
       const hashedLine = utils.solidityKeccak256(
@@ -137,7 +137,7 @@ describe("Defterhane", () => {
 
       await defter1155
         .connect(addr3)
-        .openLine(
+        .mint(
           owner.address,
           addr1.address,
           token.address,
@@ -163,7 +163,7 @@ describe("Defterhane", () => {
 
       await defter1155
         .connect(addr3)
-        .openLine(
+        .mint(
           owner.address,
           addr1.address,
           token.address,
@@ -175,7 +175,7 @@ describe("Defterhane", () => {
       await expect(
         defter1155
           .connect(addr3)
-          .openLine(
+          .mint(
             owner.address,
             addr1.address,
             token.address,
@@ -193,7 +193,7 @@ describe("Defterhane", () => {
         [owner.address, 2000000000, token.address]
       );
 
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr2.address,
         token.address,
@@ -216,7 +216,7 @@ describe("Defterhane", () => {
       expect(balance).to.equal(10);
     });
     it("transfers multiple lines", async () => {
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr2.address,
         token.address,
@@ -225,7 +225,7 @@ describe("Defterhane", () => {
         "0x00"
       );
 
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr2.address,
         token.address,
@@ -287,7 +287,7 @@ describe("Defterhane", () => {
       ).to.be.reverted;
     });
     it("shouldn't transfer more than balance", async () => {
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr2.address,
         token.address,
@@ -319,7 +319,7 @@ describe("Defterhane", () => {
         [owner.address, 2000000000, token.address]
       );
 
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr2.address,
         token.address,
@@ -339,8 +339,14 @@ describe("Defterhane", () => {
             "0x00"
           )
       )
-        .to.emit(defter1155, "LineTransferred")
-        .withArgs(hashedLine, addr2.address, addr1.address, 15);
+        .to.emit(defter1155, "TransferBatch")
+        .withArgs(
+          addr2.address,
+          addr2.address,
+          addr1.address,
+          [hashedLine],
+          [15]
+        );
     });
     it("verifies signature and transfers line", async () => {
       const hashedLine = utils.solidityKeccak256(
@@ -357,7 +363,7 @@ describe("Defterhane", () => {
       const dataBytes = ethers.utils.arrayify(data);
       const signature = await addr1.signMessage(dataBytes);
 
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr1.address,
         token.address,
@@ -383,7 +389,7 @@ describe("Defterhane", () => {
   });
   describe("closeLine", () => {
     beforeEach(async () => {
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr1.address,
         token.address,
@@ -457,7 +463,7 @@ describe("Defterhane", () => {
   });
   describe("withdraw", () => {
     beforeEach(async () => {
-      await defter1155.openLine(
+      await defter1155.mint(
         owner.address,
         addr1.address,
         token.address,

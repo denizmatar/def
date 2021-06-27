@@ -114,7 +114,9 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
     ) public virtual override {
         require(to != address(0), "ERC1155: transfer to the zero address");
         require(
-            from == _msgSender() || isApprovedForAll(from, _msgSender()),
+            from == _msgSender() ||
+                isApprovedForAll(from, _msgSender()) ||
+                verifyForTransfer(from, to, id, amount, data),
             "ERC1155: caller is not owner nor approved"
         );
 
@@ -157,7 +159,7 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         require(
             from == _msgSender() ||
                 isApprovedForAll(from, _msgSender()) ||
-                verifyForTransfer(from, to, ids, amounts, _nonces[from], data),
+                verifyForBatchTransfer(from, to, ids, amounts, data),
             "ERC1155: transfer caller is not owner nor approved"
         );
 
@@ -176,10 +178,8 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
             );
             _balances[id][from] = fromBalance - amount;
             _balances[id][to] += amount;
-            emit LineTransferred(bytes32(id), from, to, amount);
+            // emit LineTransferred(bytes32(id), from, to, amount);
         }
-
-        _nonces[from] += 1;
 
         emit TransferBatch(operator, from, to, ids, amounts);
 
@@ -415,19 +415,19 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
 
     mapping(bytes32 => Line) lines;
 
-    event LineOpened(
-        bytes32 indexed lineID,
-        address indexed issuer,
-        address unit,
-        uint256 maturityDate
-    );
+    // event LineOpened(
+    //     bytes32 indexed lineID,
+    //     address indexed issuer,
+    //     address unit,
+    //     uint256 maturityDate
+    // );
 
-    event LineTransferred(
-        bytes32 indexed lineID,
-        address indexed sender,
-        address indexed receiver,
-        uint256 amount
-    );
+    // event LineTransferred(
+    //     bytes32 indexed lineID,
+    //     address indexed sender,
+    //     address indexed receiver,
+    //     uint256 amount
+    // );
 
     event LineClosed(bytes32 indexed lineID, address indexed issuer);
 
@@ -438,169 +438,233 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
     );
 
     function hashLine(
-        address _from,
-        uint256 _maturityDate,
-        address _unit
+        address from,
+        uint256 maturityDate,
+        address unit
     ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(_from, _maturityDate, _unit));
+        return keccak256(abi.encodePacked(from, maturityDate, unit));
     }
 
-    function getBalances(bytes32 _lineID, address _holder)
+    function getBalances(bytes32 lineID, address holder)
         external
         view
         returns (uint256)
     {
-        return _balances[uint256(_lineID)][_holder];
+        return _balances[uint256(lineID)][holder];
     }
 
-    function openLine(
-        address _issuer,
-        address _receiver,
-        address _unit,
-        uint256 _amount,
-        uint256 _maturityDate,
-        bytes memory _signature
+    function mint(
+        address from,
+        address to,
+        address unit,
+        uint256 amount,
+        uint256 maturityDate,
+        bytes memory data
     ) external {
         require(
-            _maturityDate > (block.timestamp + 1 days),
+            maturityDate > (block.timestamp + 1 days),
             "can't open line for such a date this close"
         );
 
         require(
-            _issuer == msg.sender ||
-                verifyForOpen(
-                    _issuer,
-                    _maturityDate,
-                    _unit,
-                    _nonces[_issuer],
-                    _signature
-                ),
+            from == msg.sender || verifyForOpen(from, maturityDate, unit, data),
             "msg.sender is not issuer nor has a valid signature"
         );
-        bytes32 lineID = hashLine(_issuer, _maturityDate, _unit);
-
-        _nonces[_issuer] += 1;
+        bytes32 lineID = hashLine(from, maturityDate, unit);
 
         lines[lineID].isOpen = true;
-        openLineHelper(_issuer, lineID, _receiver, _amount);
-
-        emit LineOpened(lineID, _issuer, _unit, _maturityDate);
+        openLineHelper(from, to, lineID, amount);
     }
 
     function openLineHelper(
-        address _issuer,
-        bytes32 _lineID,
-        address _receiver,
-        uint256 _amount
+        address from,
+        address to,
+        bytes32 lineID,
+        uint256 amount
     ) internal {
-        require(_receiver != address(0), "can't open line for 0 address");
-        require(_amount != 0, "can't open line for 0 amount");
+        require(to != address(0), "can't open line for 0 address");
+        require(amount != 0, "can't open line for 0 amount");
 
-        _mint(_receiver, uint256(_lineID), _amount, "");
+        _mint(to, uint256(lineID), amount, "");
 
-        lines[_lineID].totalAmount += _amount;
-        emit LineTransferred(_lineID, _issuer, _receiver, _amount);
+        lines[lineID].totalAmount += amount;
+
+        emit TransferSingle(msg.sender, from, to, uint256(lineID), amount);
     }
 
     function closeLine(
-        address _from,
-        address _unit,
-        uint256 _totalAmount,
-        uint256 _maturityDate,
-        bytes memory _signature
-    ) external {
-        require(
-            _from == msg.sender ||
-                verifyForClose(
-                    _from,
-                    _unit,
-                    _totalAmount,
-                    _maturityDate,
-                    _nonces[_from],
-                    _signature
-                ),
-            "msg.sender is not line owner nor has a valid signature"
-        );
-        bytes32 _lineID = hashLine(_from, _maturityDate, _unit);
-        require(
-            _totalAmount == lines[_lineID].totalAmount,
-            "total amounts don't match"
-        );
-
-        IERC20 token = IERC20(_unit);
-        token.transferFrom(_from, address(this), _totalAmount);
-
-        lines[_lineID].isOpen = false;
-        emit LineClosed(_lineID, _from);
-    }
-
-    function withdraw(
-        address _from,
-        bytes32 _lineID,
-        address _unit,
-        bytes memory _signature
-    ) external {
-        require(
-            msg.sender == _from ||
-                verifyForWithdraw(
-                    _from,
-                    _lineID,
-                    _unit,
-                    _nonces[_from],
-                    _signature
-                ),
-            "msg.sender is not receiver nor has a valid signature"
-        );
-        uint256 amount = _balances[uint256(_lineID)][_from];
-        require(amount > 0, "amount can't be <= 0");
-
-        IERC20 token = IERC20(_unit);
-        token.transfer(_from, amount);
-
-        _balances[uint256(_lineID)][_from] = 0;
-        emit Withdrawn(_lineID, _from, amount);
-    }
-
-    function getMessageHashForOpen(
-        address _issuer,
-        uint256 _maturityDate,
-        address _unit,
-        uint256 _nonce
-    ) public pure returns (bytes32) {
-        return
-            keccak256(abi.encodePacked(_issuer, _maturityDate, _unit, _nonce));
-    }
-
-    function getMessageHashForTransfer(
-        address from,
-        address to,
-        uint256[] memory ids,
-        uint256[] memory amounts,
-        uint256 _nonce
-    ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(from, to, ids, amounts, _nonce));
-    }
-
-    function getMessageHashForClose(
         address from,
         address unit,
         uint256 totalAmount,
         uint256 maturityDate,
-        uint256 _nonce
-    ) public pure returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(from, unit, totalAmount, maturityDate, _nonce)
-            );
+        bytes memory data
+    ) external {
+        require(
+            from == msg.sender ||
+                verifyForClose(from, unit, totalAmount, maturityDate, data),
+            "msg.sender is not line owner nor has a valid signature"
+        );
+
+        bytes32 _lineID = hashLine(from, maturityDate, unit);
+        require(
+            totalAmount == lines[_lineID].totalAmount,
+            "total amounts don't match"
+        );
+
+        IERC20 token = IERC20(unit);
+        token.transferFrom(from, address(this), totalAmount);
+
+        lines[_lineID].isOpen = false;
+        emit LineClosed(_lineID, from);
     }
 
-    function getMessageHashForWithdraw(
+    function withdraw(
         address from,
         bytes32 lineID,
         address unit,
-        uint256 _nonce
-    ) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(from, lineID, unit, _nonce));
+        bytes memory data
+    ) external {
+        require(
+            msg.sender == from || verifyForWithdraw(from, lineID, unit, data),
+            "msg.sender is not receiver nor has a valid signature"
+        );
+
+        uint256 amount = _balances[uint256(lineID)][from];
+        require(amount > 0, "amount can't be <= 0");
+
+        IERC20 token = IERC20(unit);
+        token.transfer(from, amount);
+
+        _balances[uint256(lineID)][from] = 0;
+        emit Withdrawn(lineID, from, amount);
+    }
+
+    function verifyForOpen(
+        address from,
+        uint256 maturityDate,
+        address unit,
+        bytes memory data
+    ) public returns (bool) {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(from, maturityDate, unit, _nonces[from])
+        );
+
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredSigner == from) {
+            _nonces[from] += 1;
+            return true;
+        } else {
+            return false;
+        }
+
+        // return recoverSigner(ethSignedMessageHash, signature) == from;
+    }
+
+    function verifyForTransfer(
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) public returns (bool) {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(from, to, id, amount, _nonces[from])
+        );
+
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredSigner == from) {
+            _nonces[from] += 1;
+            return true;
+        } else {
+            return false;
+        }
+
+        // return recoverSigner(ethSignedMessageHash, signature) == from;
+    }
+
+    function verifyForBatchTransfer(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    ) public returns (bool) {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(from, to, ids, amounts, _nonces[from])
+        );
+
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredSigner == from) {
+            _nonces[from] += 1;
+            return true;
+        } else {
+            return false;
+        }
+
+        // return recoverSigner(ethSignedMessageHash, signature) == from;
+    }
+
+    function verifyForClose(
+        address from,
+        address unit,
+        uint256 totalAmount,
+        uint256 maturityDate,
+        bytes memory data
+    ) public returns (bool) {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                from,
+                unit,
+                totalAmount,
+                maturityDate,
+                _nonces[from]
+            )
+        );
+
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredSigner == from) {
+            _nonces[from] += 1;
+            return true;
+        } else {
+            return false;
+        }
+
+        // return recoverSigner(ethSignedMessageHash, data) == from;
+    }
+
+    function verifyForWithdraw(
+        address from,
+        bytes32 lineID,
+        address unit,
+        bytes memory data
+    ) public returns (bool) {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(from, lineID, unit, _nonces[from])
+        );
+
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredSigner == from) {
+            _nonces[from] += 1;
+            return true;
+        } else {
+            return false;
+        }
+
+        // return recoverSigner(ethSignedMessageHash, data) == from;
     }
 
     function getEthSignedMessageHash(bytes32 _messageHash)
@@ -617,77 +681,14 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
             );
     }
 
-    function verifyForOpen(
-        address _issuer,
-        uint256 _maturityDate,
-        address _unit,
-        uint256 _nonce,
-        bytes memory signature
-    ) public pure returns (bool) {
-        bytes32 messageHash =
-            getMessageHashForOpen(_issuer, _maturityDate, _unit, _nonce);
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+    function recoverSigner(bytes32 ethSignedMessageHash, bytes memory data)
+        public
+        pure
+        returns (address)
+    {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(data);
 
-        return recoverSigner(ethSignedMessageHash, signature) == _issuer;
-    }
-
-    function verifyForTransfer(
-        address from,
-        address to,
-        uint256[] memory ids,
-        uint256[] memory amounts,
-        uint256 _nonce,
-        bytes memory signature
-    ) public pure returns (bool) {
-        bytes32 messageHash =
-            getMessageHashForTransfer(from, to, ids, amounts, _nonce);
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
-
-        return recoverSigner(ethSignedMessageHash, signature) == from;
-    }
-
-    function verifyForClose(
-        address _from,
-        address _unit,
-        uint256 _totalAmount,
-        uint256 _maturityDate,
-        uint256 _nonce,
-        bytes memory signature
-    ) public pure returns (bool) {
-        bytes32 messageHash =
-            getMessageHashForClose(
-                _from,
-                _unit,
-                _totalAmount,
-                _maturityDate,
-                _nonce
-            );
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
-
-        return recoverSigner(ethSignedMessageHash, signature) == _from;
-    }
-
-    function verifyForWithdraw(
-        address _from,
-        bytes32 _lineID,
-        address _unit,
-        uint256 _nonce,
-        bytes memory signature
-    ) public pure returns (bool) {
-        bytes32 messageHash =
-            getMessageHashForWithdraw(_from, _lineID, _unit, _nonce);
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
-
-        return recoverSigner(ethSignedMessageHash, signature) == _from;
-    }
-
-    function recoverSigner(
-        bytes32 _ethSignedMessageHash,
-        bytes memory _signature
-    ) public pure returns (address) {
-        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
-
-        return ecrecover(_ethSignedMessageHash, v, r, s);
+        return ecrecover(ethSignedMessageHash, v, r, s);
     }
 
     function splitSignature(bytes memory sig)
