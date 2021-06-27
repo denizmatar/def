@@ -415,20 +415,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
 
     mapping(bytes32 => Line) lines;
 
-    // event LineOpened(
-    //     bytes32 indexed lineID,
-    //     address indexed issuer,
-    //     address unit,
-    //     uint256 maturityDate
-    // );
-
-    // event LineTransferred(
-    //     bytes32 indexed lineID,
-    //     address indexed sender,
-    //     address indexed receiver,
-    //     uint256 amount
-    // );
-
     event LineClosed(bytes32 indexed lineID, address indexed issuer);
 
     event Withdrawn(
@@ -558,8 +544,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         } else {
             return false;
         }
-
-        // return recoverSigner(ethSignedMessageHash, signature) == from;
     }
 
     function verifyForTransfer(
@@ -583,8 +567,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         } else {
             return false;
         }
-
-        // return recoverSigner(ethSignedMessageHash, signature) == from;
     }
 
     function verifyForBatchTransfer(
@@ -608,8 +590,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         } else {
             return false;
         }
-
-        // return recoverSigner(ethSignedMessageHash, signature) == from;
     }
 
     function verifyForClose(
@@ -639,8 +619,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         } else {
             return false;
         }
-
-        // return recoverSigner(ethSignedMessageHash, data) == from;
     }
 
     function verifyForWithdraw(
@@ -663,8 +641,6 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         } else {
             return false;
         }
-
-        // return recoverSigner(ethSignedMessageHash, data) == from;
     }
 
     function getEthSignedMessageHash(bytes32 _messageHash)
