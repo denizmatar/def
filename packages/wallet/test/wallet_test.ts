@@ -160,11 +160,28 @@ describe('Wallet', async () => {
 		const lineID = Wallet.calculateLineID(user1Addr, 2000000000, token.address);
 
 		await defter.connect(user1).mint(user1Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
-		await wallet.transferLines(walletUserAddr, user2Addr, [lineID], [ethers.BigNumber.from(100)], '0x00');
+		await wallet.transferLine(walletUserAddr, user2Addr, lineID, ethers.BigNumber.from(100), '0x00');
 
 		const balance = (await wallet.getBalance(lineID, user2Addr)).toNumber();
 
 		expect(balance).to.equal(100);
+	});
+	it('transfers multiple lines', async () => {
+		wallet = await Wallet.withSigner(defter.address, walletUser);
+
+		const lineID1 = Wallet.calculateLineID(user1Addr, 2000000000, token.address);
+		const lineID2 = Wallet.calculateLineID(user2Addr, 2000000000, token.address);
+
+		await defter.connect(user1).mint(user1Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
+		await defter.connect(user2).mint(user2Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
+
+		wallet.transferLines(walletUserAddr, user3Addr, [lineID1, lineID2], [ethers.BigNumber.from(100), ethers.BigNumber.from(100)], '0x00');
+
+		const balance1 = (await wallet.getBalance(lineID1, user3Addr)).toNumber();
+		const balance2 = (await wallet.getBalance(lineID2, user3Addr)).toNumber();
+
+		expect(balance1).eq(100);
+		expect(balance2).eq(100);
 	});
 	it('listens transferLine as sender', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
