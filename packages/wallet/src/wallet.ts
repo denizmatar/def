@@ -1,4 +1,3 @@
-import { hashMessage } from '@ethersproject/hash';
 import { BigNumber, ethers } from 'ethers';
 import { ERC1155Defter } from '../src/contracts/ERC1155Defter';
 import { ERC1155Defter__factory } from '../src/contracts/factories/ERC1155Defter__factory';
@@ -78,26 +77,22 @@ export class Wallet {
 	// MAIN FUNCTIONS
 	async openLine(issuer: string, receiver: string, unit: string, amount: ethers.BigNumber, maturityDate: number, signature: string): Promise<{ lineID: string; txHash: string }> {
 		const lineID = Wallet.calculateLineID(this.walletAddress, maturityDate, unit);
-		if (!this.lines.get(lineID)) {
-			const line: Line = {
-				lineID,
-				issuer: this.walletAddress,
-				maturityDate,
-				unit,
-				status: LineStatus.OPEN,
-			};
-			this.pushToLines(lineID, line);
-		}
-		const tx = await this.contract.openLine(issuer, receiver, unit, amount, maturityDate, signature);
+
+		const tx = await this.contract.mint(issuer, receiver, unit, amount, maturityDate, signature);
+
 		this.pushToPendingHistory(lineID, { amount, receiver, txHash: tx.hash, txType: TxType.ISSUE, validated: false });
 		return { lineID, txHash: tx.hash };
 	}
 
-	async transferLine(from: string, to: string, lineIDs: string[], amounts: ethers.BigNumber[], signature: string) {
+	async transferLine(from: string, to: string, lineID: string, amount: ethers.BigNumber, signature: string) {
+		const tx = await this.contract.safeTransferFrom(from, to, lineID, amount, signature);
+		this.pushToPendingHistory(lineID, { amount, receiver: to, txHash: tx.hash, txType: TxType.TRANSFER, validated: false });
+	}
+
+	async transferLines(from: string, to: string, lineIDs: string[], amounts: ethers.BigNumber[], signature: string) {
 		const tx = await this.contract.safeBatchTransferFrom(from, to, lineIDs, amounts, signature);
 		const size = lineIDs.length;
 		for (let i = 0; i < size; i++) {
-			const log = { date: new Date(), amount: amounts[i], to };
 			this.pushToPendingHistory(lineIDs[i], { amount: amounts[i], receiver: to, txHash: tx.hash, txType: TxType.TRANSFER, validated: false });
 		}
 	}
@@ -114,12 +109,15 @@ export class Wallet {
 		return await this.contract.getBalances(lineID, holder);
 	}
 
-	private eventFilterOpenLine(lineID: string | null = null, issuer: string | null = null) {
-		return this.contract.filters.LineOpened(lineID, issuer, null, null);
+	private eventFilterOpenLine(lineID: string | null = null, issuer: string | null = null, to: string | null = null) {
+		return this.contract.filters.LineOpened(lineID, issuer, to, null, null, null);
 	}
 
-	private eventFilterTransferLine(lineID: string | null = null, sender: string | null = null, receiver: string | null = null) {
-		return this.contract.filters.LineTransferred(lineID, sender, receiver, null);
+	private eventFilterTransferLine(operator: string | null = null, from: string | null = null, to: string | null = null) {
+		return this.contract.filters.TransferSingle(operator, from, to, null, null);
+	}
+	private eventFilterTransferLines(operator: string | null = null, from: string | null = null, to: string | null = null) {
+		return this.contract.filters.TransferBatchThatWorks(operator, from, to, null, null);
 	}
 
 	private eventFilterCloseLine(lineID: string | null = null, issuer: string | null = null) {
@@ -131,16 +129,17 @@ export class Wallet {
 	}
 
 	private async initializer() {
-		const transferEvents = await this.contract.queryFilter(this.eventFilterTransferLine());
 		const openEvents = await this.contract.queryFilter(this.eventFilterOpenLine());
+		const transferSingleEvents = await this.contract.queryFilter(this.eventFilterTransferLine());
+		const transferBatchEvents = await this.contract.queryFilter(this.eventFilterTransferLines());
 
-		if (transferEvents.length != 0) {
-			for (let i = 0; i < transferEvents.length; i++) {
-				const event = transferEvents[i];
-				const lineID = event.args.lineID;
-				const sender = event.args.sender;
-				const receiver = event.args.receiver;
-				const amount = event.args.amount;
+		if (transferSingleEvents.length != 0) {
+			for (let i = 0; i < transferSingleEvents.length; i++) {
+				const event = transferSingleEvents[i];
+				const sender = event.args.from;
+				const receiver = event.args.to;
+				const lineID = event.args.id.toHexString();
+				const amount = event.args.value;
 				const txHash = event.transactionHash;
 				const logIndex = event.logIndex;
 
@@ -151,6 +150,30 @@ export class Wallet {
 				}
 			}
 		}
+
+		if (transferBatchEvents.length != 0) {
+			for (let i = 0; i < transferBatchEvents.length; i++) {
+				const event = transferBatchEvents[i];
+
+				const sender = event.args.from;
+				const receiver = event.args.to;
+				const lineIDs = event.args.ids;
+				const amounts = event.args.amounts;
+				const txHash = event.transactionHash;
+				const logIndex = event.logIndex;
+
+				for (let i = 0; i < lineIDs.length; i++) {
+					const lineID = lineIDs[i].toHexString();
+					const amount = amounts[i];
+					if (sender == this.walletAddress) {
+						this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash, logIndex });
+					} else if (receiver == this.walletAddress) {
+						this.pushToReceiverHistory(lineID, { date: new Date(), amount, sender, txHash, logIndex });
+					}
+				}
+			}
+		}
+
 		if (openEvents.length != 0) {
 			for (let i = 0; i < openEvents.length; i++) {
 				const event = openEvents[i];
@@ -159,7 +182,7 @@ export class Wallet {
 				const unit = event.args.unit;
 				const maturityDate = event.args.maturityDate.toNumber();
 
-				// LineStatus neye gore open/closed???
+				// #TODO: LineStatus neye gore open/closed???
 				// closedLine lara bakip matchlenebilir?
 				this.pushToLines(lineID, { lineID, issuer, maturityDate, unit, status: LineStatus.OPEN });
 			}
@@ -182,44 +205,95 @@ export class Wallet {
 		};
 	}
 
-	public listenTransferLineAsSender() {
-		const filter = this.eventFilterTransferLine(null, this.walletAddress);
-		this.contract.on(filter, (lineID: string, sender: string, receiver: string, amount: ethers.BigNumber, event: ethers.Event) => {
-			const history = this.pendingHistory.get(lineID);
-			if (history) {
-				for (let i = 0; i < history.length; i++) {
-					if (history[i].txHash == event.transactionHash) {
-						this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash: event.transactionHash, logIndex: event.logIndex });
+	// #TODO: add listenTransferLineAsSender & listenTransferLineAsReceiver
+
+	public listenTransferLinesAsSender() {
+		const filter = this.eventFilterTransferLines(null, this.walletAddress);
+		this.contract.on(filter, async (operator: string, from: string, receiver: string, ids: ethers.BigNumber[], values: ethers.BigNumber[], event: ethers.Event) => {
+			const _operator = operator;
+			const _from = from;
+			const _to = receiver;
+			const _ids = ids;
+			const _values = values;
+			const _txHash = event.transactionHash;
+			const _logIndex = event.logIndex;
+
+			for (let i = 0; i < _ids.length; i++) {
+				const id = _ids[i].toHexString();
+				const value = values[i];
+
+				const history = this.pendingHistory.get(id);
+
+				if (history) {
+					for (let item of history) {
+						if (item.amount.eq(value) && item.receiver == _to && item.txHash == _txHash) {
+							this.pushToSenderHistory(id, { date: new Date(), amount: value, receiver: _to, txHash: _txHash, logIndex: _logIndex });
+							item.validated = true;
+						}
 					}
+				} else {
+					this.pushToSenderHistory(id, { date: new Date(), amount: value, receiver: _to, txHash: event.transactionHash, logIndex: event.logIndex });
 				}
 			}
 		});
 	}
 
-	public listenTransferLineAsReceiver() {
-		const filter = this.eventFilterTransferLine(null, null, this.walletAddress);
-		this.contract.on(filter, async (lineID: string, sender: string, receiver: string, amount: ethers.BigNumber, event: ethers.Event) => {
-			const history = this.pendingHistory.get(lineID);
-			if (history) {
-				for (let i = 0; i < history.length; i++) {
-					if (history[i].txHash == event.transactionHash) {
-						this.pushToReceiverHistory(lineID, { date: new Date(), amount, sender, txHash: event.transactionHash, logIndex: event.logIndex });
+	public listenTransferLinesAsReceiver() {
+		const filter = this.eventFilterTransferLines(null, null, this.walletAddress);
+		this.contract.on(filter, async (operator: string, from: string, to: string, ids: ethers.BigNumber[], values: ethers.BigNumber[], event: ethers.Event) => {
+			const _operator = operator;
+			const _from = from;
+			const _to = to;
+			const txHash = event.transactionHash;
+			const logIndex = event.logIndex;
+
+			for (let i = 0; i < ids.length; i++) {
+				const id = ids[i].toHexString();
+				const value = values[i];
+				const history = this.pendingHistory.get(id);
+
+				if (history) {
+					for (let item of history) {
+						if (item.amount.eq(value) && item.receiver == _to && item.txHash == txHash) {
+							this.pushToReceiverHistory(id, { date: new Date(), amount: value, sender: _from, txHash: txHash, logIndex: logIndex });
+							item.validated = true;
+						}
 					}
+				} else {
+					this.pushToReceiverHistory(id, { date: new Date(), amount: value, sender: _from, txHash: txHash, logIndex: logIndex });
 				}
 			}
 		});
 	}
 
 	public listenOpenLineAsIssuer() {
-		const filter = this.eventFilterTransferLine(null, this.walletAddress);
-		this.contract.on(filter, async (lineID: string, sender: string, receiver: string, amount: ethers.BigNumber, event: ethers.Event) => {
+		const filter = this.eventFilterOpenLine(null, this.walletAddress);
+		this.contract.on(filter, async (lineID: string, issuer: string, to: string, unit: string, amount: number, maturityDate: ethers.BigNumber, event: ethers.Event) => {
+			const _lineID = lineID;
+			const _issuer = issuer;
+			const _to = to;
+			const _unit = unit;
+			const _amount = ethers.BigNumber.from(amount);
+			const _maturityDate = maturityDate.toNumber();
 			const history = this.pendingHistory.get(lineID);
+
 			if (history) {
-				for (let i = 0; i < history.length; i++) {
-					if (history[i].txHash == event.transactionHash) {
-						this.pushToSenderHistory(lineID, { date: new Date(), amount, receiver, txHash: event.transactionHash, logIndex: event.logIndex });
+				for (let item of history) {
+					if (item.txHash == event.transactionHash) {
+						const line: Line = {
+							lineID: _lineID,
+							issuer: _issuer,
+							maturityDate: _maturityDate,
+							unit: _unit,
+							status: LineStatus.OPEN,
+						};
+						this.pushToLines(lineID, line);
+						this.pushToSenderHistory(lineID, { date: new Date(), amount: _amount, receiver: _to, txHash: event.transactionHash, logIndex: event.logIndex });
+						item.validated = true;
 					}
 				}
+			} else {
+				this.pushToSenderHistory(lineID, { date: new Date(), amount: _amount, receiver: _to, txHash: event.transactionHash, logIndex: event.logIndex });
 			}
 		});
 	}

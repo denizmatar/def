@@ -182,6 +182,7 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         }
 
         emit TransferBatch(operator, from, to, ids, amounts);
+        emit TransferBatchThatWorks(operator, from, to, ids, amounts);
 
         _doSafeBatchTransferAcceptanceCheck(
             operator,
@@ -192,6 +193,15 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
             data
         );
     }
+
+    // TEMPORARY
+    event TransferBatchThatWorks(
+        address indexed operator,
+        address indexed from,
+        address indexed to,
+        uint256[] ids,
+        uint256[] amounts
+    );
 
     function _setURI(string memory newuri) internal virtual {
         _uri = newuri;
@@ -415,6 +425,15 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
 
     mapping(bytes32 => Line) lines;
 
+    event LineOpened(
+        bytes32 indexed lineID,
+        address indexed issuer,
+        address indexed receiver,
+        address unit,
+        uint256 amount,
+        uint256 maturityDate
+    );
+
     event LineClosed(bytes32 indexed lineID, address indexed issuer);
 
     event Withdrawn(
@@ -459,12 +478,14 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         bytes32 lineID = hashLine(from, maturityDate, unit);
 
         lines[lineID].isOpen = true;
-        openLineHelper(from, to, lineID, amount);
+        mintHelper(from, to, unit, maturityDate, lineID, amount);
     }
 
-    function openLineHelper(
+    function mintHelper(
         address from,
         address to,
+        address unit,
+        uint256 maturityDate,
         bytes32 lineID,
         uint256 amount
     ) internal {
@@ -475,7 +496,7 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
 
         lines[lineID].totalAmount += amount;
 
-        emit TransferSingle(msg.sender, from, to, uint256(lineID), amount);
+        emit LineOpened(lineID, from, to, unit, amount, maturityDate);
     }
 
     function closeLine(

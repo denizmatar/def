@@ -6,17 +6,14 @@ import { ERC1155Defter } from '../src/contracts/ERC1155Defter';
 import { MTRToken } from '../src/contracts/MTRToken';
 import { ERC1155Defter__factory } from '../src/contracts/factories/ERC1155Defter__factory';
 import { MTRToken__factory as Token__factory } from '../src/contracts/factories/MTRToken__factory';
-import { markAsUntransferable } from 'worker_threads';
 
 let wallet: Wallet;
 let token: MTRToken;
 let defter: ERC1155Defter;
 
-// RPC PROVIDER
 const provider = new ethers.providers.JsonRpcProvider('http://127.0.0.1:8545');
 provider.pollingInterval = 100;
 
-// SIGNERS
 const deployer: ethers.Signer = provider.getSigner(0);
 const walletUser: ethers.Signer = provider.getSigner(1);
 const user1: ethers.Signer = provider.getSigner(2);
@@ -24,14 +21,12 @@ const user2: ethers.Signer = provider.getSigner(3);
 const user3: ethers.Signer = provider.getSigner(4);
 const user4: ethers.Signer = provider.getSigner(5);
 
-// SIGNER ADDRESSES
 let walletUserAddr: string;
 let user1Addr: string;
 let user2Addr: string;
 let user3Addr: string;
 let user4Addr: string;
 
-// SLEEP FNC
 async function sleep(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -56,11 +51,11 @@ describe('Wallet', async () => {
 
 		const amount1 = 1000;
 		const lineID1 = Wallet.calculateLineID(user1Addr, maturity, token.address);
-		await defter.connect(user1).openLine(user1Addr, walletUserAddr, token.address, amount1, 2000000000, '0x00');
+		await defter.connect(user1).mint(user1Addr, walletUserAddr, token.address, amount1, 2000000000, '0x00');
 
 		const amount2 = 1001;
 		const lineID2 = Wallet.calculateLineID(user2Addr, maturity, token.address);
-		await defter.connect(user2).openLine(user2Addr, walletUserAddr, token.address, amount2, 2000000000, '0x00');
+		await defter.connect(user2).mint(user2Addr, walletUserAddr, token.address, amount2, 2000000000, '0x00');
 
 		const amount3 = 900;
 		await defter.connect(walletUser).safeBatchTransferFrom(walletUserAddr, user3Addr, [lineID1], [amount3], '0x00');
@@ -79,7 +74,8 @@ describe('Wallet', async () => {
 		expect(receiverHistory).length(1);
 		let logReceiver = receiverHistory![0];
 		expect(logReceiver.amount.toNumber()).eq(amount1);
-		expect(logReceiver.sender).eq(user1Addr);
+		// expect(logReceiver.sender).eq(user1Addr);
+		expect(logReceiver.sender).eq(ethers.constants.AddressZero);
 
 		// receiver lineID2
 		receiverHistory = wallet.receiverHistory.get(lineID2);
@@ -87,7 +83,8 @@ describe('Wallet', async () => {
 		expect(receiverHistory).length(1);
 		logReceiver = receiverHistory![0];
 		expect(logReceiver.amount.toNumber()).eq(amount2);
-		expect(logReceiver.sender).eq(user2Addr);
+		// expect(logReceiver.sender).eq(user2Addr);
+		expect(logReceiver.sender).eq(ethers.constants.AddressZero);
 
 		// sender lineID1
 		let senderHistory = wallet.senderHistory.get(lineID1);
@@ -140,23 +137,21 @@ describe('Wallet', async () => {
 		const balance = (await wallet.getBalance(lineID, user1Addr)).toNumber();
 		expect(balance).to.equal(100);
 	});
-	it('listens openLine', async () => {
+	it('listens openLine as issuer', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
 
-		wallet.listenTransferLineAsSender();
+		wallet.listenOpenLineAsIssuer();
 		const histBefore = wallet.senderHistory;
-		// alttakini yapmak zorunda kaldim cunku expect icine direkt histBefore.size verince
-		// 1 cikiyor 0 olmasi gerekirken. openLine'dan once bastirinca 0 oluyor sonra bastirinca 1 oluyor
-		// yani constant bir degisken nasil degisebiliyor anlamis degilim. baya merak ettim sebebini
 		const histBeforeSize = histBefore.size;
 
-		// await wallet.openLine(2000000000, token.address, user1Addr, ethers.BigNumber.from(100));
-		await wallet.openLine(walletUserAddr, user1Addr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
+		await wallet.openLine(walletUserAddr, user1Addr, token.address, ethers.BigNumber.from(50), 2000000000, '0x00');
+		await wallet.openLine(walletUserAddr, user1Addr, token.address, ethers.BigNumber.from(50), 2000000000, '0x00');
 		await sleep(2000);
 
 		const histAfter = wallet.senderHistory;
+		const histAfterSize = histAfter.size;
 
-		expect(histAfter.size - histBeforeSize).to.equal(1);
+		expect(histAfterSize - histBeforeSize).to.equal(1);
 	}).timeout(5000);
 
 	it('transfers line', async () => {
@@ -164,28 +159,24 @@ describe('Wallet', async () => {
 
 		const lineID = Wallet.calculateLineID(user1Addr, 2000000000, token.address);
 
-		// await defter.connect(user1).openLine(2000000000, token.address, walletUserAddr, ethers.BigNumber.from(100));
-		await defter.connect(user1).openLine(user1Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
-		// await wallet.transferLine([lineID], [ethers.BigNumber.from(100)], user2Addr);
-		await wallet.transferLine(walletUserAddr, user2Addr, [lineID], [ethers.BigNumber.from(100)], '0x00');
+		await defter.connect(user1).mint(user1Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
+		await wallet.transferLines(walletUserAddr, user2Addr, [lineID], [ethers.BigNumber.from(100)], '0x00');
 
 		const balance = (await wallet.getBalance(lineID, user2Addr)).toNumber();
 
 		expect(balance).to.equal(100);
 	});
-	it('listens transferLine', async () => {
+	it('listens transferLine as sender', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
-		wallet.listenTransferLineAsSender();
+		wallet.listenTransferLinesAsSender();
 
 		const histBefore = wallet.senderHistory;
 		const histBeforeSize = histBefore.size;
 
 		const lineID = Wallet.calculateLineID(user1Addr, 2000000000, token.address);
 
-		// await defter.connect(user1).openLine(2000000000, token.address, walletUserAddr, ethers.BigNumber.from(100));
-		await defter.connect(user1).openLine(user1Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
-		// await wallet.transferLine([lineID], [ethers.BigNumber.from(100)], user2Addr);
-		await wallet.transferLine(walletUserAddr, user2Addr, [lineID], [ethers.BigNumber.from(100)], '0x00');
+		await defter.connect(user1).mint(user1Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
+		await wallet.transferLines(walletUserAddr, user2Addr, [lineID], [ethers.BigNumber.from(100)], '0x00');
 
 		await sleep(5000);
 
@@ -193,11 +184,27 @@ describe('Wallet', async () => {
 
 		expect(histAfter.size - histBeforeSize).to.equal(1);
 	}).timeout(10000);
+	it('listens transferLine as receiver', async () => {
+		wallet = await Wallet.withSigner(defter.address, walletUser);
+		wallet.listenTransferLinesAsReceiver();
 
+		const histBefore = wallet.receiverHistory;
+		const histBeforeSize = histBefore.size;
+
+		const lineID = Wallet.calculateLineID(user1Addr, 2000000000, token.address);
+
+		await defter.connect(user1).mint(user1Addr, user2Addr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
+		await defter.connect(user2).safeBatchTransferFrom(user2Addr, walletUserAddr, [lineID], [ethers.BigNumber.from(100)], '0x00');
+
+		await sleep(5000);
+
+		const histAfter = wallet.receiverHistory;
+
+		expect(histAfter.size - histBeforeSize).to.be.equal(1);
+	}).timeout(10000);
 	it('closes line', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
 
-		// await wallet.openLine(2000000000, token.address, user1Addr, ethers.BigNumber.from(100));
 		await wallet.openLine(walletUserAddr, user1Addr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
 
 		await token.connect(deployer).transfer(walletUserAddr, 100);
@@ -205,7 +212,6 @@ describe('Wallet', async () => {
 
 		const balanceBefore = (await token.balanceOf(defter.address)).toNumber();
 
-		// await wallet.closeLine(2000000000, token.address, 100);
 		await wallet.closeLine(walletUserAddr, token.address, 100, 2000000000, '0x00');
 
 		const balanceAfter = (await token.balanceOf(defter.address)).toNumber();
@@ -217,17 +223,14 @@ describe('Wallet', async () => {
 		wallet = await Wallet.withSigner(defter.address, walletUser);
 		const lineID = ethers.utils.solidityKeccak256(['address', 'uint256', 'address'], [user1Addr, 2000000000, token.address]);
 
-		// await defter.connect(user1).openLine(2000000000, token.address, walletUserAddr, ethers.BigNumber.from(100));
-		await defter.connect(user1).openLine(user1Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
+		await defter.connect(user1).mint(user1Addr, walletUserAddr, token.address, ethers.BigNumber.from(100), 2000000000, '0x00');
 
 		await token.connect(deployer).transfer(user1Addr, 100);
 		await token.connect(user1).approve(defter.address, 100);
 
-		// await defter.connect(user1).closeLine(2000000000, token.address, 100);
 		await defter.connect(user1).closeLine(user1Addr, token.address, 100, 2000000000, '0x00');
 
 		const balanceBefore = (await wallet.getBalance(lineID, walletUserAddr)).toNumber();
-		// await wallet.withdraw(lineID, token.address);
 		await wallet.withdraw(walletUserAddr, lineID, token.address, '0x00');
 		const balanceAfter = (await wallet.getBalance(lineID, walletUserAddr)).toNumber();
 	});
