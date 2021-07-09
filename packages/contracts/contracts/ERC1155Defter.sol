@@ -27,6 +27,20 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
 
     constructor(string memory uri_) {
         _setURI(uri_);
+        uint256 chainId;
+        assembly {
+            chainId := chainid()
+        }
+        DOMAIN_SEPERATOR = keccak256(
+            abi.encode(
+                EIP712DOMAIN_TYPEHASH,
+                keccak256(bytes(name)),
+                keccak256(bytes("1")),
+                // chainId,
+                1,
+                address(this)
+            )
+        );
     }
 
     function supportsInterface(bytes4 interfaceId)
@@ -418,6 +432,40 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
     ========================================================================
     */
 
+    bytes32 constant EIP712DOMAIN_TYPEHASH =
+        keccak256(
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+        );
+
+    bytes32 constant OPENLINE_TYPEHASH =
+        keccak256(
+            "openLine(address from,address to,address unit,uint256 amount,uint256 maturityDate,uint256 nonce)"
+        );
+
+    bytes32 constant SAFETRANSFERFROM_TYPEHASH =
+        keccak256(
+            "safeTransferFrom(address from,address to,uint256 id,uint256 amount,uint256 nonce)"
+        );
+
+    bytes32 constant SAFEBATCHTRANSFERFROM_TYPEHASH =
+        keccak256(
+            "safeBatchTransferFrom(address from,address to,uint256[] ids,uint256[] amounts,uint256 nonce"
+        );
+
+    bytes32 constant CLOSELINE_TYPEHASH =
+        keccak256(
+            "closeLine(address from,address unit,uint256 totalAmount,uint256 maturityDate,uint256 nonce"
+        );
+
+    bytes32 constant WITHDRAW_TYPEHASH =
+        keccak256(
+            "withdraw(address from,bytes32 lineID,address unit,uint256 nonce"
+        );
+
+    bytes32 public DOMAIN_SEPERATOR;
+
+    string public constant name = "Defter";
+
     struct Line {
         bool isOpen;
         uint256 totalAmount;
@@ -472,7 +520,8 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         );
 
         require(
-            from == msg.sender || verifyForOpen(from, maturityDate, unit, data),
+            from == msg.sender ||
+                verifyForOpen(from, to, unit, amount, maturityDate, data),
             "msg.sender is not issuer nor has a valid signature"
         );
         bytes32 lineID = hashLine(from, maturityDate, unit);
@@ -548,18 +597,48 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
 
     function verifyForOpen(
         address from,
-        uint256 maturityDate,
+        address to,
         address unit,
+        uint256 amount,
+        uint256 maturityDate,
         bytes memory data
-    ) public returns (bool) {
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(from, maturityDate, unit, _nonces[from])
+    ) internal returns (bool) {
+        uint256 nonce = _nonces[from];
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPERATOR,
+                keccak256(
+                    abi.encode(
+                        OPENLINE_TYPEHASH,
+                        from,
+                        to,
+                        unit,
+                        amount,
+                        maturityDate,
+                        nonce
+                    )
+                )
+            )
         );
 
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
-        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(data);
 
-        if (recoveredSigner == from) {
+        address recoveredAddr = ecrecover(digest, v, r, s);
+
+        // console.log(recoveredAddr);
+        // console.log(from);
+
+        // return recoveredAddr == from;
+
+        // bytes32 messageHash = keccak256(
+        //     abi.encodePacked(from, maturityDate, unit, _nonces[from])
+        // );
+
+        // bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+        // address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredAddr == from) {
             _nonces[from] += 1;
             return true;
         } else {
@@ -574,15 +653,40 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         uint256 amount,
         bytes memory data
     ) public returns (bool) {
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(from, to, id, amount, _nonces[from])
+        uint256 nonce = _nonces[from];
+
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPERATOR,
+                keccak256(
+                    abi.encode(
+                        SAFETRANSFERFROM_TYPEHASH,
+                        from,
+                        to,
+                        id,
+                        amount,
+                        nonce
+                    )
+                )
+            )
         );
 
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(data);
 
-        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+        address recoveredAddr = ecrecover(digest, v, r, s);
 
-        if (recoveredSigner == from) {
+        // return recoveredAddr == from;
+
+        // bytes32 messageHash = keccak256(
+        //     abi.encodePacked(from, to, id, amount, _nonces[from])
+        // );
+
+        // bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        // address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredAddr == from) {
             _nonces[from] += 1;
             return true;
         } else {
@@ -597,15 +701,43 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         uint256[] memory amounts,
         bytes memory data
     ) public returns (bool) {
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(from, to, ids, amounts, _nonces[from])
+        uint256 nonce = _nonces[from];
+
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPERATOR,
+                keccak256(
+                    abi.encode(
+                        SAFEBATCHTRANSFERFROM_TYPEHASH,
+                        from,
+                        to,
+                        ids,
+                        amounts,
+                        nonce
+                    )
+                )
+            )
         );
 
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(data);
 
-        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+        address recoveredAddr = ecrecover(digest, v, r, s);
 
-        if (recoveredSigner == from) {
+        console.log(recoveredAddr);
+        console.log(from);
+
+        // return recoveredAddr == from;
+
+        // bytes32 messageHash = keccak256(
+        //     abi.encodePacked(from, to, ids, amounts, _nonces[from])
+        // );
+
+        // bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        // address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredAddr == from) {
             _nonces[from] += 1;
             return true;
         } else {
@@ -620,21 +752,46 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         uint256 maturityDate,
         bytes memory data
     ) public returns (bool) {
-        bytes32 messageHash = keccak256(
+        uint256 nonce = _nonces[from];
+
+        bytes32 digest = keccak256(
             abi.encodePacked(
-                from,
-                unit,
-                totalAmount,
-                maturityDate,
-                _nonces[from]
+                "\x19\x01",
+                DOMAIN_SEPERATOR,
+                keccak256(
+                    abi.encode(
+                        CLOSELINE_TYPEHASH,
+                        from,
+                        unit,
+                        totalAmount,
+                        maturityDate,
+                        nonce
+                    )
+                )
             )
         );
 
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(data);
 
-        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+        address recoveredAddr = ecrecover(digest, v, r, s);
 
-        if (recoveredSigner == from) {
+        // return recoveredAddr == from;
+
+        // bytes32 messageHash = keccak256(
+        //     abi.encodePacked(
+        //         from,
+        //         unit,
+        //         totalAmount,
+        //         maturityDate,
+        //         _nonces[from]
+        //     )
+        // );
+
+        // bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        // address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredAddr == from) {
             _nonces[from] += 1;
             return true;
         } else {
@@ -648,15 +805,33 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         address unit,
         bytes memory data
     ) public returns (bool) {
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(from, lineID, unit, _nonces[from])
+        uint256 nonce = _nonces[from];
+
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPERATOR,
+                keccak256(
+                    abi.encode(WITHDRAW_TYPEHASH, from, lineID, unit, nonce)
+                )
+            )
         );
 
-        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(data);
 
-        address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+        address recoveredAddr = ecrecover(digest, v, r, s);
 
-        if (recoveredSigner == from) {
+        // return recoveredAddr == from;
+
+        // bytes32 messageHash = keccak256(
+        //     abi.encodePacked(from, lineID, unit, _nonces[from])
+        // );
+
+        // bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        // address recoveredSigner = recoverSigner(ethSignedMessageHash, data);
+
+        if (recoveredAddr == from) {
             _nonces[from] += 1;
             return true;
         } else {
@@ -664,29 +839,29 @@ contract ERC1155Defter is Context, ERC165, IERC1155, IERC1155MetadataURI {
         }
     }
 
-    function getEthSignedMessageHash(bytes32 _messageHash)
-        public
-        pure
-        returns (bytes32)
-    {
-        return
-            keccak256(
-                abi.encodePacked(
-                    "\x19Ethereum Signed Message:\n32",
-                    _messageHash
-                )
-            );
-    }
+    // function getEthSignedMessageHash(bytes32 _messageHash)
+    //     public
+    //     pure
+    //     returns (bytes32)
+    // {
+    //     return
+    //         keccak256(
+    //             abi.encodePacked(
+    //                 "\x19Ethereum Signed Message:\n32",
+    //                 _messageHash
+    //             )
+    //         );
+    // }
 
-    function recoverSigner(bytes32 ethSignedMessageHash, bytes memory data)
-        public
-        pure
-        returns (address)
-    {
-        (bytes32 r, bytes32 s, uint8 v) = splitSignature(data);
+    // function recoverSigner(bytes32 ethSignedMessageHash, bytes memory data)
+    //     public
+    //     pure
+    //     returns (address)
+    // {
+    //     (bytes32 r, bytes32 s, uint8 v) = splitSignature(data);
 
-        return ecrecover(ethSignedMessageHash, v, r, s);
-    }
+    //     return ecrecover(ethSignedMessageHash, v, r, s);
+    // }
 
     function splitSignature(bytes memory sig)
         public

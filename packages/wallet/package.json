@@ -2,15 +2,14 @@
   "name": "@def/wallet",
   "version": "0.1.0",
   "license": "UNLICENSED",
-  "dependencies": {
-    "ethers": "^5.1.4"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@typechain/ethers-v5": "^7.0.0",
     "@types/chai": "^4.2.18",
     "@types/mocha": "^8.2.2",
     "@types/node": "^15.0.2",
     "chai": "^4.3.4",
+    "ethers": "^5.1.4",
     "mocha": "^7.2.0",
     "ts-node": "^10.0.0",
     "typechain": "^5.0.0",

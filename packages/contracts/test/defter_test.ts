@@ -13,6 +13,58 @@ let addr2: SignerWithAddress;
 let addr3: SignerWithAddress;
 let addr0 = ethers.constants.AddressZero;
 
+let domain: any;
+
+const openLineTypes = {
+  openLine: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "unit", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "maturityDate", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+  ],
+};
+
+const safeTransferFromTypes = {
+  safeTransferFrom: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "id", type: "uint256" },
+    { name: "amount", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+  ],
+};
+
+const safeBatchTransferFromTypes = {
+  safeBatchTransferFrom: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "ids", type: "uint256[]" },
+    { name: "amounts", type: "uint256[]" },
+    { name: "nonce", type: "uint256" },
+  ],
+};
+
+const closeLineTypes = {
+  closeLine: [
+    { name: "from", type: "address" },
+    { name: "unit", type: "address" },
+    { name: "totalAmount", type: "uint256" },
+    { name: "maturityDate", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+  ],
+};
+
+const withdrawTypes = {
+  withdraw: [
+    { name: "from", type: "address" },
+    { name: "lineID", type: "bytes32" },
+    { name: "unit", type: "address" },
+    { name: "nonce", type: "uint256" },
+  ],
+};
+
 describe("Defterhane", () => {
   beforeEach(async () => {
     [owner, addr1, addr2, addr3] = await ethers.getSigners();
@@ -27,6 +79,13 @@ describe("Defterhane", () => {
     const tokenFactory = await ethers.getContractFactory("MTRToken", owner);
     token = (await tokenFactory.deploy(10000)) as MtrToken;
     await token.deployed();
+
+    domain = {
+      name: "Defter",
+      version: "1",
+      chainId: 1,
+      verifyingContract: defter1155.address,
+    };
   });
   describe("openLine", () => {
     it("gets line balance", async () => {
@@ -116,8 +175,15 @@ describe("Defterhane", () => {
           "0x00"
         )
       )
-        .to.emit(defter1155, "TransferSingle")
-        .withArgs(owner.address, owner.address, addr1.address, hashedLine, 20);
+        .to.emit(defter1155, "LineOpened")
+        .withArgs(
+          hashedLine,
+          owner.address,
+          addr1.address,
+          token.address,
+          20,
+          2000000000
+        );
     });
     it("verifies signature and opens line", async () => {
       const hashedLine = utils.solidityKeccak256(
@@ -127,13 +193,20 @@ describe("Defterhane", () => {
 
       const nonce = await defter1155._nonces(owner.address);
 
-      const data = ethers.utils.solidityKeccak256(
-        ["address", "uint256", "address", "uint256"],
-        [owner.address, 2000000000, token.address, nonce]
-      );
-      const dataBytes = ethers.utils.arrayify(data);
+      const value = {
+        from: owner.address,
+        to: addr1.address,
+        unit: token.address,
+        amount: 100,
+        maturityDate: 2000000000,
+        nonce: nonce,
+      };
 
-      const signature = await owner.signMessage(dataBytes);
+      const signature = await owner._signTypedData(
+        domain,
+        openLineTypes,
+        value
+      );
 
       await defter1155
         .connect(addr3)
@@ -153,13 +226,28 @@ describe("Defterhane", () => {
     it("shouldn't open line with old signature(nonce)", async () => {
       const nonce = await defter1155._nonces(owner.address);
 
-      const data = ethers.utils.solidityKeccak256(
-        ["address", "uint256", "address", "uint256"],
-        [owner.address, 2000000000, token.address, nonce]
-      );
-      const dataBytes = ethers.utils.arrayify(data);
+      // const data = ethers.utils.solidityKeccak256(
+      //   ["address", "uint256", "address", "uint256"],
+      //   [owner.address, 2000000000, token.address, nonce]
+      // );
+      // const dataBytes = ethers.utils.arrayify(data);
 
-      const signature = await owner.signMessage(dataBytes);
+      // const signature = await owner.signMessage(dataBytes);
+
+      const value = {
+        from: owner.address,
+        to: addr1.address,
+        unit: token.address,
+        amount: 100,
+        maturityDate: 2000000000,
+        nonce: nonce,
+      };
+
+      const signature = await owner._signTypedData(
+        domain,
+        openLineTypes,
+        value
+      );
 
       await defter1155
         .connect(addr3)
@@ -186,7 +274,7 @@ describe("Defterhane", () => {
       ).to.be.reverted;
     });
   });
-  describe("safeBatchTransferFrom", () => {
+  describe("transferLine", () => {
     it("transfers line", async () => {
       const hashedLine = utils.solidityKeccak256(
         ["address", "uint256", "address"],
@@ -354,14 +442,27 @@ describe("Defterhane", () => {
         [owner.address, 2000000000, token.address]
       );
 
-      const nonce = (await defter1155._nonces(addr1.address)).toNumber();
+      const nonce = await defter1155._nonces(addr1.address);
 
-      const data = ethers.utils.solidityKeccak256(
-        ["address", "address", "bytes32[]", "uint256[]", "uint256"],
-        [addr1.address, addr2.address, [hashedLine], [100], nonce]
+      // const data = ethers.utils.solidityKeccak256(
+      //   ["address", "address", "bytes32[]", "uint256[]", "uint256"],
+      //   [addr1.address, addr2.address, [hashedLine], [100], nonce]
+      // );
+      // const dataBytes = ethers.utils.arrayify(data);
+      // const signature = await addr1.signMessage(dataBytes);
+      const value = {
+        from: addr1.address,
+        to: addr2.address,
+        ids: [hashedLine],
+        amounts: [100],
+        nonce: nonce,
+      };
+
+      const signature = await owner._signTypedData(
+        domain,
+        safeBatchTransferFromTypes,
+        value
       );
-      const dataBytes = ethers.utils.arrayify(data);
-      const signature = await addr1.signMessage(dataBytes);
 
       await defter1155.mint(
         owner.address,
@@ -440,12 +541,26 @@ describe("Defterhane", () => {
     it("verifies signature and closes line", async () => {
       const nonce = (await defter1155._nonces(owner.address)).toNumber();
 
-      const data = ethers.utils.solidityKeccak256(
-        ["address", "address", "uint256", "uint256", "uint256"],
-        [owner.address, token.address, 50, 2000000000, nonce]
+      // const data = ethers.utils.solidityKeccak256(
+      //   ["address", "address", "uint256", "uint256", "uint256"],
+      //   [owner.address, token.address, 50, 2000000000, nonce]
+      // );
+      // const dataBytes = ethers.utils.arrayify(data);
+      // const signature = await owner.signMessage(dataBytes);
+
+      const value = {
+        from: owner.address,
+        unit: token.address,
+        totalAmount: 50,
+        maturityDate: 2000000000,
+        nonce: nonce,
+      };
+
+      const signature = await owner._signTypedData(
+        domain,
+        closeLineTypes,
+        value
       );
-      const dataBytes = ethers.utils.arrayify(data);
-      const signature = await owner.signMessage(dataBytes);
 
       const balanceBefore = (
         await token.balanceOf(defter1155.address)
@@ -520,12 +635,25 @@ describe("Defterhane", () => {
         [owner.address, 2000000000, token.address]
       );
 
-      const data = ethers.utils.solidityKeccak256(
-        ["address", "bytes32", "address", "uint256"],
-        [addr1.address, hashedLine, token.address, nonce]
+      // const data = ethers.utils.solidityKeccak256(
+      //   ["address", "bytes32", "address", "uint256"],
+      //   [addr1.address, hashedLine, token.address, nonce]
+      // );
+      // const dataBytes = ethers.utils.arrayify(data);
+      // const signature = await addr1.signMessage(dataBytes);
+
+      const value = {
+        from: addr1.address,
+        lineID: hashedLine,
+        unit: token.address,
+        nonce: nonce,
+      };
+
+      const signature = await owner._signTypedData(
+        domain,
+        withdrawTypes,
+        value
       );
-      const dataBytes = ethers.utils.arrayify(data);
-      const signature = await addr1.signMessage(dataBytes);
 
       const balanceBefore = (await token.balanceOf(addr1.address)).toNumber();
 
